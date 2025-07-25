@@ -1,0 +1,134 @@
+#+title: CapBAC-BLS: A Capability-Based Access Control Library using BLS Signatures
+
+* CapBAC-BLS: A Capability-Based Access Control Library using BLS Signatures
+
+This is a high-performance, secure Java library for creating and verifying authorization tokens based on the *Capability-Based Access Control (CapBAC)* model. It uses advanced *BLS Aggregate Signatures* to ensure token integrity and provide highly efficient verification.
+
+The library is designed with a clean, high-level API that abstracts away cryptographic complexity, making it easy to integrate a robust and modern authorization system into your application.
+
+-----
+
+** Core Concepts
+
+The library is built on a few key concepts that work together to create a flexible and secure trust model.
+
+*** 1. Capability-Based Access Control (CapBAC)
+Instead of checking an Access Control List (ACL) to see if a user has permission, the user presents a *token (a capability)* that directly grants them a specific permission. This token is a self-contained, verifiable proof of authorization.
+
+*** 2. BLS Aggregate Signatures
+This is the cryptographic heart of the library. BLS signatures can be aggregated, meaning multiple signatures from different users can be combined into a single, compact signature. The magic is that this single aggregate signature can be verified against all the original signers and their messages in one single, fast operation. This makes verifying a chain of delegation extremely efficient.
+
+*** 3. The Actors and Tokens
+The library defines a few core entities:
+
+- =Principal=: Represents an entity (a user, service, or device) that can hold permissions and sign tokens. It securely encapsulates the entity's ID and their secret key.
+- =CapBACCertificate=: A *delegation token*. It represents a =Principal= granting a specific capability to another =Principal=. It is a verifiable proof of delegation.
+- =CapBACInvocation=: An *action token*. It is created when a =Principal= uses a delegated capability. It contains the full delegation chain (=CapBACCertificate=s) plus a final invocation record, all bound together by an aggregate signature.
+
+-----
+
+** Features
+
+- *High Performance*: Uses BLS aggregate signatures for extremely fast verification of complex delegation chains.
+- *Strong Security*: The aggregate signature makes the entire token cryptographically tamper-proof. The =Principal= class prevents secret key leakage.
+- *Clean, High-Level API*: The =CapBAC= class provides simple, intuitive methods (=forgeCertificate=, =delegateCertificate=, =invoke=) that handle all the underlying cryptographic complexity.
+- *Flexible Capability Model*: Supports arbitrary permission types through a =CapabilityCodec= interface, allowing you to define simple string-based permissions or complex, structured capabilities.
+- *Implicit Revocation Model*: Revocation is handled by removing a =Principal='s public key from the =Resolver=, providing an immediate and simple way to invalidate all tokens signed by that principal.
+
+-----
+
+** High-Level API Usage
+
+Using the library is straightforward. The main entry point is the =CapBAC= class.
+
+*** Example: Forge, Delegate, and Invoke
+
+Here's a complete example of a root entity delegating a permission to an intermediate entity, who then delegates a more specific permission to a final user, who then invokes it.
+
+#+BEGIN_SRC java
+// 1. Setup the environment and Principals
+CapBACScheme scheme = CapBACScheme.MIN_PK;
+CapBAC api = new CapBAC(scheme);
+
+// In a real app, you would load or retrieve these, not generate them.
+Principal root = new Principal(scheme);
+Principal intermediate = new Principal(scheme);
+Principal user = new Principal(scheme);
+
+// The resolver would typically be backed by a database.
+Resolver resolver = id -> { /* ... logic to get public key for an id ... */ };
+TrustChecker trustChecker = id -> java.util.Arrays.equals(id, root.getId());
+
+long expiration = Instant.now().getEpochSecond() + 3600; // Expires in 1 hour
+
+// 2. The Root forges the initial certificate for the intermediate principal
+Capability readCapability = new StringCapability("read");
+CapBACCertificate rootCertificate = api.forgeCertificate(
+    root,
+    intermediate.getId(),
+    readCapability,
+    expiration
+);
+
+// The certificate is valid and can be passed to the intermediate principal.
+assertTrue(rootCertificate.verify(resolver, trustChecker));
+
+
+// 3. The Intermediate Principal delegates a more specific capability to the User
+Capability fileCapability = new StringCapability("read:/data/file.txt");
+CapBACCertificate delegatedCertificate = api.delegateCertificate(
+    intermediate,
+    rootCertificate,
+    user.getId(),
+    fileCapability,
+    expiration
+);
+
+// This new certificate is also valid and contains the full chain of trust.
+assertTrue(delegatedCertificate.verify(resolver, trustChecker));
+
+
+// 4. The User invokes the capability
+CapBACInvocation invocationToken = api.invoke(
+    user,
+    delegatedCertificate,
+    fileCapability, // The user invokes the specific capability they were granted
+    expiration
+);
+
+// The final invocation token is presented to a service for verification.
+// The service can verify the entire chain and the invocation in one step.
+assertTrue(invocationToken.verify(resolver, trustChecker));
+#+END_SRC
+
+-----
+
+** Security Considerations
+
+*** Revocation
+The library uses an *implicit revocation* model. Revocation is handled by the =Resolver= interface. In a production environment, the =Resolver= would be backed by a database or another key store. To revoke a =Principal=, you simply remove their public key from this store. Any subsequent attempt to verify a token signed by that =Principal= will fail because the resolver can no longer provide their public key.
+
+*** Replay Attacks
+The tokens include an =expiration= timestamp to mitigate replay attacks. For systems requiring higher security, it is recommended to embed a *nonce* or unique ID within the =Capability= object itself. The verifying service would then be responsible for tracking seen nonces to ensure a token can only be used once.
+
+-----
+
+** Building and Testing
+
+The project uses Maven.
+
+- *To build the JAR file:*
+  #+BEGIN_SRC sh
+  mvn clean package
+  #+END_SRC
+
+- *To run the test suite:*
+  #+BEGIN_SRC sh
+  mvn test
+  #+END_SRC
+
+-----
+
+** Dependencies
+
+- [[https://github.com/ConsenSys/jblst][jblst]]: A Java wrapper for the high-performance =blst= BLS signature library.

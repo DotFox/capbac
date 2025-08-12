@@ -7,3 +7,4 @@ tmp/
 java/target/
 java/.settings/
 java/.classpath
+java/dependency-reduced-pom.xml

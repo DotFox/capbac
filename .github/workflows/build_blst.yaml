@@ -3,8 +3,8 @@ name: Build BLST library
 on: push
 
 jobs:
-  build:
-    name: Build shared library
+  test-java:
+    name: Test Java implementation
     runs-on: ubuntu-24.04
     steps:
 

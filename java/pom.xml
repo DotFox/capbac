@@ -5,8 +5,8 @@
   <artifactId>capbac-bls</artifactId>
   <version>0.1-SNAPSHOT</version>
   <name>capbac-bls</name>
-  <!-- FIXME change it to the project's website -->
-  <url>http://www.example.com</url>
+  <url>https://capbac.dotfox.dev</url>
+  <inceptionYear>2025</inceptionYear>
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -23,6 +23,7 @@
       <groupId>supranational</groupId>
       <artifactId>blst</artifactId>
       <version>0.3.15</version>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>commons-io</groupId>

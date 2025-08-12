@@ -1,0 +1,32 @@
+name: Build BLST library
+
+on: push
+
+jobs:
+  build:
+    name: Build shared library
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+          cache-dependency-path: 'java/pom.xml'
+
+      - name: Build java blst library
+        run: |
+          cd supranational/blst/bindings/java
+          ../../build.sh -D__BLST_PORTABLE__
+          ./run.me
+
+      - name: Run tests
+        run: |
+          cd java
+          mvn clean test

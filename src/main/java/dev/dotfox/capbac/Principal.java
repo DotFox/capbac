@@ -24,7 +24,7 @@ public class Principal {
     }
 
     public byte[] getId() {
-        return id;
+        return id.clone();
     }
 
     public BLSSignature sign(byte[] message) {

@@ -14,18 +14,18 @@ public class Certificate {
     private BLSSignature signature;
 
     public Certificate(byte[] issuer, byte[] subject, long expiration, byte[] capability) {
-        this.issuer = issuer;
-        this.subject = subject;
+        this.issuer = issuer.clone();
+        this.subject = subject.clone();
         this.expiration = expiration;
-        this.capability = capability;
+        this.capability = capability.clone();
     }
 
     public byte[] getIssuer() {
-        return issuer;
+        return issuer.clone();
     }
 
     public byte[] getSubject() {
-        return subject;
+        return subject.clone();
     }
 
     public long getExpiration() {
@@ -33,7 +33,7 @@ public class Certificate {
     }
 
     public byte[] getRawCapability() {
-        return capability;
+        return capability.clone();
     }
 
     public <T extends Capability> T getCapability(CapabilityCodec<T> codec) throws IOException {

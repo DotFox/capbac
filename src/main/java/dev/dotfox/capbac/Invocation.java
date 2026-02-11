@@ -11,13 +11,13 @@ public class Invocation {
     private final byte[] capability;
 
     public Invocation(byte[] invoker, long expiration, byte[] capability) {
-        this.invoker = invoker;
+        this.invoker = invoker.clone();
         this.expiration = expiration;
-        this.capability = capability;
+        this.capability = capability.clone();
     }
 
     public byte[] getInvoker() {
-        return invoker;
+        return invoker.clone();
     }
 
     public long getExpiration() {
@@ -25,7 +25,7 @@ public class Invocation {
     }
 
     public byte[] getRawCapability() {
-        return capability;
+        return capability.clone();
     }
 
     public <T extends Capability> T getCapability(CapabilityCodec<T> codec) throws IOException {

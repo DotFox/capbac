@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import dev.dotfox.bls.BLSPublicKey;
@@ -140,7 +141,7 @@ public class CapBACInvocation implements CapBACToken {
 
     @Override
     public List<Certificate> getCertificateChain() {
-        return certificateChain;
+        return Collections.unmodifiableList(certificateChain);
     }
 
     public Invocation getInvocation() {

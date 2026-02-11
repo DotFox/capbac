@@ -54,7 +54,7 @@
             </configuration>
           </execution>
           <execution>
-            <id>add-aupranational-blst-resources</id>
+            <id>add-supranational-blst-resources</id>
             <phase>generate-sources</phase>
             <goals><goal>add-resource</goal></goals>
             <configuration>

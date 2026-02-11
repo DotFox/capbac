@@ -11,6 +11,7 @@ import supranational.blst.Pairing;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
@@ -40,10 +41,14 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
     @Override
     public SecretKey keyGen() {
         byte[] ikm = new byte[128];
-        getRND().nextBytes(ikm);
-        supranational.blst.SecretKey sk = new supranational.blst.SecretKey();
-        sk.keygen(ikm);
-        return createSecretKey(sk);
+        try {
+            getRND().nextBytes(ikm);
+            supranational.blst.SecretKey sk = new supranational.blst.SecretKey();
+            sk.keygen(ikm);
+            return createSecretKey(sk);
+        } finally {
+            Arrays.fill(ikm, (byte) 0);
+        }
     }
 
     @Override
@@ -53,6 +58,9 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
 
     @Override
     public boolean verify(PublicKey pk, byte[] message, Signature signature) {
+        if (!keyValidate(pk)) {
+            return false;
+        }
         return verifyWithDst(pk, message, signature, getCiphersuite());
     }
 
@@ -103,6 +111,11 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
         }
         if (messages.stream().map(ByteBuffer::wrap).distinct().count() < messages.size()) {
             return false;
+        }
+        for (PublicKey pk : pks) {
+            if (!keyValidate(pk)) {
+                return false;
+            }
         }
 
         Pairing ctx = new Pairing(true, getCiphersuite());

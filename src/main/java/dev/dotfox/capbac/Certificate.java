@@ -11,7 +11,6 @@ public class Certificate {
     private final byte[] subject;
     private final long expiration;
     private final byte[] capability;
-    private BLSSignature signature;
 
     public Certificate(byte[] issuer, byte[] subject, long expiration, byte[] capability) {
         this.issuer = issuer.clone();
@@ -38,14 +37,6 @@ public class Certificate {
 
     public <T extends Capability> T getCapability(CapabilityCodec<T> codec) throws IOException {
         return codec.fromBytes(this.capability);
-    }
-
-    public BLSSignature getSignature() {
-        return signature;
-    }
-
-    public void setSignature(BLSSignature signature) {
-        this.signature = signature;
     }
 
     public byte[] toBytes() {

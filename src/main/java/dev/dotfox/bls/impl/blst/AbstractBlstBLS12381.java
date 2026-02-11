@@ -8,6 +8,7 @@ import dev.dotfox.bls.impl.Signature;
 import supranational.blst.BLST_ERROR;
 import supranational.blst.Pairing;
 
+import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,7 +93,7 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
         if (pks.size() != messages.size()) {
             return false;
         }
-        if (messages.stream().distinct().count() < messages.size()) {
+        if (messages.stream().map(ByteBuffer::wrap).distinct().count() < messages.size()) {
             return false;
         }
 

@@ -1,5 +1,7 @@
 package dev.dotfox.bls.impl.blst.g2;
 
+import java.util.Arrays;
+
 import dev.dotfox.bls.impl.PublicKey;
 import supranational.blst.P1_Affine;
 
@@ -38,7 +40,7 @@ public class BlstPublicKey implements PublicKey {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((point == null) ? 0 : point.hashCode());
+        result = prime * result + ((point == null) ? 0 : Arrays.hashCode(point.compress()));
         return result;
     }
 

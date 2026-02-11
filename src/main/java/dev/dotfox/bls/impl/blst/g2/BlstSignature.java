@@ -1,5 +1,6 @@
 package dev.dotfox.bls.impl.blst.g2;
 
+import java.util.Arrays;
 import java.util.List;
 
 import dev.dotfox.bls.impl.BlsException;
@@ -42,7 +43,7 @@ public class BlstSignature implements Signature {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((point == null) ? 0 : point.hashCode());
+        result = prime * result + ((point == null) ? 0 : Arrays.hashCode(point.compress()));
         return result;
     }
 

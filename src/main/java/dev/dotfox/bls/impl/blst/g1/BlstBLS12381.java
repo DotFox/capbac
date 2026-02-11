@@ -11,10 +11,16 @@ import supranational.blst.Pairing;
 public class BlstBLS12381 extends AbstractBlstBLS12381 {
 
     private static final String CIPHERSUITE = "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_";
+    private static final String POP_CIPHERSUITE = "BLS_POP_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_";
 
     @Override
     protected String getCiphersuite() {
         return CIPHERSUITE;
+    }
+
+    @Override
+    protected String getPopCiphersuite() {
+        return POP_CIPHERSUITE;
     }
 
     @Override
@@ -29,7 +35,12 @@ public class BlstBLS12381 extends AbstractBlstBLS12381 {
 
     @Override
     public BlstSignature sign(SecretKey sk, byte[] message) {
-        return ((BlstSecretKey) sk).sign(message, getCiphersuite());
+        return signWithDst(sk, message, getCiphersuite());
+    }
+
+    @Override
+    protected BlstSignature signWithDst(SecretKey sk, byte[] message, String dst) {
+        return ((BlstSecretKey) sk).sign(message, dst);
     }
 
     @Override

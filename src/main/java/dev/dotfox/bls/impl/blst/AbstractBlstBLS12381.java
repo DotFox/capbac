@@ -21,11 +21,15 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
     // Abstract methods to be implemented by subclasses
     protected abstract String getCiphersuite();
 
+    protected abstract String getPopCiphersuite();
+
     protected abstract SecretKey createSecretKey(supranational.blst.SecretKey sk);
 
     public abstract PublicKey skToPk(SecretKey sk);
 
     public abstract Signature sign(SecretKey sk, byte[] message);
+
+    protected abstract Signature signWithDst(SecretKey sk, byte[] message, String dst);
 
     protected abstract BLST_ERROR doAggregate(Pairing ctx, PublicKey pk, Signature sig, byte[] message);
 
@@ -49,6 +53,10 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
 
     @Override
     public boolean verify(PublicKey pk, byte[] message, Signature signature) {
+        return verifyWithDst(pk, message, signature, getCiphersuite());
+    }
+
+    private boolean verifyWithDst(PublicKey pk, byte[] message, Signature signature, String dst) {
         supranational.blst.P1_Affine sigP1 = signature instanceof dev.dotfox.bls.impl.blst.g1.BlstSignature
                 ? ((dev.dotfox.bls.impl.blst.g1.BlstSignature) signature).getPoint()
                 : null;
@@ -64,10 +72,10 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
                 : null;
 
         if (sigP1 != null && pkP2 != null) {
-            return sigP1.core_verify(pkP2, true, message, getCiphersuite()) == BLST_ERROR.BLST_SUCCESS;
+            return sigP1.core_verify(pkP2, true, message, dst) == BLST_ERROR.BLST_SUCCESS;
         }
         if (sigP2 != null && pkP1 != null) {
-            return sigP2.core_verify(pkP1, true, message, getCiphersuite()) == BLST_ERROR.BLST_SUCCESS;
+            return sigP2.core_verify(pkP1, true, message, dst) == BLST_ERROR.BLST_SUCCESS;
         }
         throw new BlsException("Type mismatch between public key and signature for verification.");
     }
@@ -111,12 +119,12 @@ public abstract class AbstractBlstBLS12381 implements BLS12381 {
     @Override
     public Signature popProve(SecretKey sk) {
         PublicKey pk = skToPk(sk);
-        return sign(sk, pk.toBytes());
+        return signWithDst(sk, pk.toBytes(), getPopCiphersuite());
     }
 
     @Override
     public boolean popVerify(PublicKey pk, Signature proof) {
-        return verify(pk, pk.toBytes(), proof);
+        return verifyWithDst(pk, pk.toBytes(), proof, getPopCiphersuite());
     }
 
     @Override

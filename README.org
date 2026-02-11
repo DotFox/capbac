@@ -1,7 +1,5 @@
 #+title: CapBAC-BLS: A Capability-Based Access Control Library using BLS Signatures
 
-* CapBAC-BLS: A Capability-Based Access Control Library using BLS Signatures
-
 This is a high-performance, secure Java library for creating and verifying authorization tokens based on the *Capability-Based Access Control (CapBAC)* model. It uses advanced *BLS Aggregate Signatures* to ensure token integrity and provide highly efficient verification.
 
 The library is designed with a clean, high-level API that abstracts away cryptographic complexity, making it easy to integrate a robust and modern authorization system into your application.

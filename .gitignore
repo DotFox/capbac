@@ -4,7 +4,7 @@
 tmp/
 
 *.class
-java/target/
-java/.settings/
-java/.classpath
-java/dependency-reduced-pom.xml
+target/
+.settings/
+.classpath
+dependency-reduced-pom.xml

@@ -2,29 +2,16 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>dev.dotfox</groupId>
-  <artifactId>capbac-bls</artifactId>
+  <artifactId>capbac</artifactId>
   <version>0.1-SNAPSHOT</version>
-  <name>capbac-bls</name>
+  <name>capbac</name>
   <url>https://capbac.dotfox.dev</url>
   <inceptionYear>2025</inceptionYear>
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
-  <repositories>
-    <repository>
-      <id>ProjectRepo</id>
-      <name>ProjectRepo</name>
-      <url>file:///${project.basedir}/libs</url>
-    </repository>
-  </repositories>
   <dependencies>
-    <dependency>
-      <groupId>supranational</groupId>
-      <artifactId>blst</artifactId>
-      <version>0.3.15</version>
-      <scope>compile</scope>
-    </dependency>
     <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
@@ -51,6 +38,47 @@
   </dependencies>
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>add-supranational-blst</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/supranational/blst/bindings/java</source>
+              </sources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>add-aupranational-blst-resources</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-resource</goal></goals>
+            <configuration>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/supranational/blst</directory>
+                  <includes>
+                    <include>LICENSE</include>
+                  </includes>
+                  <targetPath>META-INF/supranational/blst</targetPath>
+                </resource>
+                <resource>
+                  <directory>${project.basedir}/supranational/blst/bindings/java</directory>
+                  <includes>
+                    <include>supranational/blst/Mac/**</include>
+                    <include>supranational/blst/Linux/**</include>
+                    <include>supranational/blst/Windows/**</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
@@ -82,7 +110,7 @@
     <repository>
       <id>github</id>
       <name>GitHub Packages</name>
-      <url>https://maven.pkg.github.com/DotFox/capbac-bls</url>
+      <url>https://maven.pkg.github.com/DotFox/capbac</url>
     </repository>
   </distributionManagement>
 </project>

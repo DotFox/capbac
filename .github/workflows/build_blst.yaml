@@ -1,32 +1,326 @@
-name: Build BLST library
+name: Build and Test
 
-on: push
+on:
+  push:
+  release:
+    types: [published]
 
 jobs:
-  test-java:
-    name: Test Java implementation
+  test:
+    name: Test
     runs-on: ubuntu-24.04
     steps:
-
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '21'
-          cache: 'maven'
-          cache-dependency-path: 'java/pom.xml'
+          cache: maven
 
-      - name: Build java blst library
-        run: |
-          cd supranational/blst/bindings/java
-          ../../build.sh -D__BLST_PORTABLE__
-          ./run.me
+      - name: Install SWIG
+        run: sudo apt-get update && sudo apt-get install -y swig
+
+      - name: Build blst
+        working-directory: supranational/blst/bindings/java
+        run: ./build.sh -D__BLST_PORTABLE__
 
       - name: Run tests
+        run: mvn clean test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+  build-blst:
+    name: Build blst (${{ matrix.os-name }}/${{ matrix.arch }})
+    if: github.event_name == 'release'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            os-name: Linux
+            arch: amd64
+            lib-name: libblst.so
+
+          - runner: ubuntu-24.04
+            os-name: Linux
+            arch: aarch64
+            lib-name: libblst.so
+
+          - runner: macos-15-intel
+            os-name: Mac
+            arch: x86_64
+            lib-name: libblst.dylib
+
+          - runner: macos-15
+            os-name: Mac
+            arch: aarch64
+            lib-name: libblst.dylib
+
+          - runner: windows-2022
+            os-name: Windows
+            arch: amd64
+            lib-name: blst.dll
+
+          - runner: windows-2022
+            os-name: Windows
+            arch: aarch64
+            lib-name: blst.dll
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # --- Linux-specific setup ---
+      - name: Install cross-compilation tools (Linux aarch64)
+        if: matrix.os-name == 'Linux' && matrix.arch == 'aarch64'
         run: |
-          cd java
-          mvn clean test
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Install SWIG (Linux)
+        if: matrix.os-name == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y swig
+
+      # --- macOS-specific setup ---
+      - name: Install SWIG (macOS)
+        if: matrix.os-name == 'Mac'
+        run: brew install swig
+
+      # --- Windows-specific setup ---
+      - name: Install SWIG (Windows)
+        if: matrix.os-name == 'Windows'
+        run: choco install swig -y
+
+      # --- Java setup (all platforms) ---
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # --- Build libblst.a + JNI shared library ---
+
+      # Native Unix builds: build.sh handles everything
+      - name: Build blst (Linux amd64)
+        if: matrix.os-name == 'Linux' && matrix.arch == 'amd64'
+        working-directory: supranational/blst/bindings/java
+        run: ./build.sh -D__BLST_PORTABLE__
+
+      - name: Build blst (macOS)
+        if: matrix.os-name == 'Mac'
+        working-directory: supranational/blst/bindings/java
+        run: ./build.sh -D__BLST_PORTABLE__
+
+      # Linux aarch64: cross-compile
+      - name: Build blst (Linux aarch64 cross)
+        if: matrix.os-name == 'Linux' && matrix.arch == 'aarch64'
+        working-directory: supranational/blst/bindings/java
+        run: |
+          # Build libblst.a for aarch64
+          CC=aarch64-linux-gnu-gcc ../../build.sh -D__BLST_PORTABLE__
+
+          # Generate SWIG wrappers
+          PKG=supranational/blst
+          mkdir -p $PKG
+          swig -c++ -java -package supranational.blst -outdir $PKG \
+               -D__BLST_BYTES_T__ -o blst_wrap.cpp ../blst.swg
+
+          # Compile Java sources
+          "$JAVA_HOME/bin/javac" $PKG/*.java
+
+          # Build cross-compiled shared library
+          SO_DIR=$PKG/Linux/aarch64
+          mkdir -p $SO_DIR
+          aarch64-linux-gnu-g++ -shared -o $SO_DIR/libblst.so -fPIC -fvisibility=hidden \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" -I.. \
+            -D__BLST_BYTES_T__ \
+            -O -Wall -Wno-unused-function blst_wrap.cpp \
+            libblst.a -Wl,-Bsymbolic
+
+      # Windows builds: use build.bat with MSVC toolchain
+      - name: Setup MSVC (Windows amd64)
+        if: matrix.os-name == 'Windows' && matrix.arch == 'amd64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Setup MSVC (Windows aarch64)
+        if: matrix.os-name == 'Windows' && matrix.arch == 'aarch64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_arm64
+
+      - name: Build blst (Windows)
+        if: matrix.os-name == 'Windows'
+        working-directory: supranational/blst
+        shell: cmd
+        run: build.bat -D__BLST_PORTABLE__
+
+      - name: Build JNI shared library (Windows)
+        if: matrix.os-name == 'Windows'
+        working-directory: supranational/blst/bindings/java
+        shell: cmd
+        run: |
+          set PKG=supranational\blst
+
+          rem Generate SWIG wrappers
+          mkdir %PKG% 2>nul
+          swig -c++ -java -package supranational.blst -outdir %PKG% -D__BLST_BYTES_T__ -o blst_wrap.cpp ..\blst.swg
+
+          rem Compile Java sources
+          "%JAVA_HOME%\bin\javac" %PKG%\*.java
+
+          rem Determine output directory
+          set SO_DIR=%PKG%\${{ matrix.os-name }}\${{ matrix.arch }}
+          mkdir %SO_DIR% 2>nul
+
+          rem Compile blst_wrap.cpp
+          cl /nologo /O2 /MD /EHsc /D__BLST_BYTES_T__ /I"%JAVA_HOME%\include" /I"%JAVA_HOME%\include\win32" /I.. /c blst_wrap.cpp
+
+          rem Link into blst.dll
+          link /nologo /dll /out:%SO_DIR%\blst.dll blst_wrap.obj ..\..\blst.lib /def:..\..\build\win64\blst.def
+
+      # --- Find and upload the shared library ---
+      - name: Find shared library
+        id: find-lib
+        working-directory: supranational/blst/bindings/java
+        shell: bash
+        run: |
+          LIB=$(find supranational/blst -name "${{ matrix.lib-name }}" -type f | head -1)
+          echo "lib-path=$LIB" >> "$GITHUB_OUTPUT"
+          echo "Found library at: $LIB"
+
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: blst-${{ matrix.os-name }}-${{ matrix.arch }}
+          path: supranational/blst/bindings/java/${{ steps.find-lib.outputs.lib-path }}
+          if-no-files-found: error
+
+  build:
+    name: Build with all platforms
+    if: github.event_name == 'release'
+    needs: build-blst
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install SWIG
+        run: sudo apt-get update && sudo apt-get install -y swig
+
+      - name: Generate SWIG Java sources
+        working-directory: supranational/blst/bindings/java
+        run: |
+          PKG=supranational/blst
+          mkdir -p $PKG
+          swig -c++ -java -package supranational.blst -outdir $PKG \
+               -D__BLST_BYTES_T__ -o blst_wrap.cpp ../blst.swg
+
+      - name: Download all native library artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-libs
+
+      - name: Place native libraries into resource directories
+        run: |
+          BASE=supranational/blst/bindings/java/supranational/blst
+          for artifact_dir in native-libs/blst-*/; do
+            dir_name=$(basename "$artifact_dir")
+            # Extract OS name and arch from "blst-{OS}-{arch}"
+            os_name=$(echo "$dir_name" | sed 's/^blst-//' | sed 's/-[^-]*$//')
+            arch=$(echo "$dir_name" | sed 's/.*-//')
+
+            target_dir="$BASE/$os_name/$arch"
+            mkdir -p "$target_dir"
+
+            find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) \
+              -exec cp {} "$target_dir/" \;
+
+            echo "Placed: $(ls "$target_dir") -> $target_dir"
+          done
+
+          echo "Final native library layout:"
+          find "$BASE" -type f
+
+      - name: Build and test with Maven
+        run: mvn clean test
+
+  publish:
+    name: Publish to GitHub Packages
+    if: github.event_name == 'release'
+    needs: [test, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install SWIG
+        run: sudo apt-get update && sudo apt-get install -y swig
+
+      - name: Generate SWIG Java sources
+        working-directory: supranational/blst/bindings/java
+        run: |
+          PKG=supranational/blst
+          mkdir -p $PKG
+          swig -c++ -java -package supranational.blst -outdir $PKG \
+               -D__BLST_BYTES_T__ -o blst_wrap.cpp ../blst.swg
+
+      - name: Download all native library artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-libs
+
+      - name: Place native libraries into resource directories
+        run: |
+          BASE=supranational/blst/bindings/java/supranational/blst
+          for artifact_dir in native-libs/blst-*/; do
+            dir_name=$(basename "$artifact_dir")
+            os_name=$(echo "$dir_name" | sed 's/^blst-//' | sed 's/-[^-]*$//')
+            arch=$(echo "$dir_name" | sed 's/.*-//')
+
+            target_dir="$BASE/$os_name/$arch"
+            mkdir -p "$target_dir"
+
+            find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) \
+              -exec cp {} "$target_dir/" \;
+          done
+
+      - name: Publish to GitHub Packages
+        run: mvn deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

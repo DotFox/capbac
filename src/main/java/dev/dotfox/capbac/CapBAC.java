@@ -63,6 +63,7 @@ public class CapBAC {
         BLSSignature aggregateSignature = bls
                 .aggregate(java.util.Arrays.asList(originalToken.getAggregateSignature(), invocationSignature));
 
-        return new CapBACInvocation(scheme, originalToken.getCertificateChain(), invocation, aggregateSignature);
+        List<Certificate> newChain = new ArrayList<>(originalToken.getCertificateChain());
+        return new CapBACInvocation(scheme, newChain, invocation, aggregateSignature);
     }
 }

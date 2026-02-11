@@ -56,12 +56,21 @@ public class CapBACInvocation implements CapBACToken {
         List<BLSPublicKey> publicKeys = new ArrayList<>();
         List<byte[]> messages = new ArrayList<>();
 
-        certificateChain.forEach(cert -> {
-            publicKeys.add(resolver.resolve(cert.getIssuer()));
+        for (Certificate cert : certificateChain) {
+            BLSPublicKey pk = resolver.resolve(cert.getIssuer());
+            if (pk == null) {
+                return false;
+            }
+            publicKeys.add(pk);
             messages.add(cert.toBytes());
-        });
+        }
 
-        publicKeys.add(resolver.resolve(invocation.getInvoker()));
+        BLSPublicKey invokerPk = resolver.resolve(invocation.getInvoker());
+        if (invokerPk == null) {
+            return false;
+        }
+
+        publicKeys.add(invokerPk);
         messages.add(invocation.toBytes());
 
         return scheme.getBls().aggregateVerify(publicKeys, messages, aggregateSignature);

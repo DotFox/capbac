@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import dev.dotfox.bls.BLSPublicKey;
@@ -48,10 +49,14 @@ public class CapBACCertificate implements CapBACToken {
         List<BLSPublicKey> publicKeys = new ArrayList<>();
         List<byte[]> messages = new ArrayList<>();
 
-        certificateChain.forEach(cert -> {
-            publicKeys.add(resolver.resolve(cert.getIssuer()));
+        for (Certificate cert : certificateChain) {
+            BLSPublicKey pk = resolver.resolve(cert.getIssuer());
+            if (pk == null) {
+                return false;
+            }
+            publicKeys.add(pk);
             messages.add(cert.toBytes());
-        });
+        }
 
         return scheme.getBls().aggregateVerify(publicKeys, messages, aggregateSignature);
     }
@@ -110,7 +115,7 @@ public class CapBACCertificate implements CapBACToken {
 
     @Override
     public List<Certificate> getCertificateChain() {
-        return certificateChain;
+        return Collections.unmodifiableList(certificateChain);
     }
 
     @Override

@@ -21,7 +21,7 @@ The library defines a few core entities:
 
 - =Principal=: Represents an entity (a user, service, or device) that can hold permissions and sign tokens. It securely encapsulates the entity's ID and their secret key.
 - =CapBACCertificate=: A *delegation token*. It represents a =Principal= granting a specific capability to another =Principal=. It is a verifiable proof of delegation.
-- =CapBACInvocation=: An *action token*. It is created when a =Principal= uses a delegated capability. It contains the full delegation chain (=CapBACCertificate=s) plus a final invocation record, all bound together by an aggregate signature.
+- =CapBACInvocation=: An *action token*. It is created when a =Principal= uses a delegated capability. It contains the full delegation chain plus a final invocation record, all bound together by an aggregate signature.
 
 -----
 
@@ -31,6 +31,7 @@ The library defines a few core entities:
 - *Strong Security*: The aggregate signature makes the entire token cryptographically tamper-proof. The =Principal= class prevents secret key leakage.
 - *Clean, High-Level API*: The =CapBAC= class provides simple, intuitive methods (=forgeCertificate=, =delegateCertificate=, =invoke=) that handle all the underlying cryptographic complexity.
 - *Flexible Capability Model*: Supports arbitrary permission types through a =CapabilityCodec= interface, allowing you to define simple string-based permissions or complex, structured capabilities.
+- *Attenuation Enforcement*: Capabilities are checked for valid attenuation at both creation time and verification time via the =AttenuationChecker= interface, preventing privilege escalation in delegation chains.
 - *Implicit Revocation Model*: Revocation is handled by removing a =Principal='s public key from the =Resolver=, providing an immediate and simple way to invalidate all tokens signed by that principal.
 
 -----
@@ -46,7 +47,18 @@ Here's a complete example of a root entity delegating a permission to an interme
 #+BEGIN_SRC java
 // 1. Setup the environment and Principals
 CapBACScheme scheme = CapBACScheme.MIN_PK;
-CapBAC api = new CapBAC(scheme);
+
+// Define how capabilities are decoded from bytes
+CapabilityCodec<StringCapability> codec = new StringCapabilityCodec();
+
+// Define the attenuation rule: a child capability must be
+// a refinement (prefix) of its parent
+AttenuationChecker<StringCapability> checker =
+    (parent, child) -> child.getValue().startsWith(parent.getValue());
+
+// The CapBAC API is generic over the capability type and enforces
+// attenuation at both creation time and verification time
+CapBAC<StringCapability> api = new CapBAC<>(scheme, codec, checker);
 
 // In a real app, you would load or retrieve these, not generate them.
 Principal root = new Principal(scheme);
@@ -60,7 +72,7 @@ TrustChecker trustChecker = id -> java.util.Arrays.equals(id, root.getId());
 long expiration = Instant.now().getEpochSecond() + 3600; // Expires in 1 hour
 
 // 2. The Root forges the initial certificate for the intermediate principal
-Capability readCapability = new StringCapability("read");
+StringCapability readCapability = new StringCapability("read");
 CapBACCertificate rootCertificate = api.forgeCertificate(
     root,
     intermediate.getId(),
@@ -69,11 +81,14 @@ CapBACCertificate rootCertificate = api.forgeCertificate(
 );
 
 // The certificate is valid and can be passed to the intermediate principal.
-assertTrue(rootCertificate.verify(resolver, trustChecker));
+assertTrue(rootCertificate.verify(resolver, trustChecker, codec, checker));
 
 
 // 3. The Intermediate Principal delegates a more specific capability to the User
-Capability fileCapability = new StringCapability("read:/data/file.txt");
+// "read:/data/file.txt" starts with "read", so attenuation is valid.
+// Trying to delegate a broader capability (e.g. "write") would throw
+// IllegalArgumentException.
+StringCapability fileCapability = new StringCapability("read:/data/file.txt");
 CapBACCertificate delegatedCertificate = api.delegateCertificate(
     intermediate,
     rootCertificate,
@@ -83,7 +98,7 @@ CapBACCertificate delegatedCertificate = api.delegateCertificate(
 );
 
 // This new certificate is also valid and contains the full chain of trust.
-assertTrue(delegatedCertificate.verify(resolver, trustChecker));
+assertTrue(delegatedCertificate.verify(resolver, trustChecker, codec, checker));
 
 
 // 4. The User invokes the capability
@@ -96,12 +111,20 @@ CapBACInvocation invocationToken = api.invoke(
 
 // The final invocation token is presented to a service for verification.
 // The service can verify the entire chain and the invocation in one step.
-assertTrue(invocationToken.verify(resolver, trustChecker));
+assertTrue(invocationToken.verify(resolver, trustChecker, codec, checker));
 #+END_SRC
 
 -----
 
 ** Security Considerations
+
+*** Attenuation
+The =AttenuationChecker= interface prevents *privilege escalation* in delegation chains. Each delegated or invoked capability must be a valid attenuation (a subset or refinement) of its parent capability. This is enforced in two places:
+
+- *At creation time*: =delegateCertificate()= and =invoke()= check the new capability against the parent and throw =IllegalArgumentException= if attenuation is violated.
+- *At verification time*: =verify()= walks the full chain and checks every parent-child capability pair, returning =false= if any step escalates privileges.
+
+You define the attenuation rule by implementing =AttenuationChecker=. For example, a prefix-based rule where ="read:/data/file.txt"= is a valid attenuation of ="read"= but ="write"= is not.
 
 *** Revocation
 The library uses an *implicit revocation* model. Revocation is handled by the =Resolver= interface. In a production environment, the =Resolver= would be backed by a database or another key store. To revoke a =Principal=, you simply remove their public key from this store. Any subsequent attempt to verify a token signed by that =Principal= will fail because the resolver can no longer provide their public key.
@@ -129,4 +152,4 @@ The project uses Maven.
 
 ** Dependencies
 
-- [[https://github.com/ConsenSys/jblst][jblst]]: A Java wrapper for the high-performance =blst= BLS signature library.
+- [[https://github.com/supranational/blst][blst]]: A high-performance BLS signature library (vendored with Java bindings).

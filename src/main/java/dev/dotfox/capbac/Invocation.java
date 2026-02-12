@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
 public class Invocation {
     private final byte[] invoker;
@@ -42,7 +43,7 @@ public class Invocation {
             dos.write(capability);
             return bos.toByteArray();
         } catch (IOException e) {
-            throw new RuntimeException("Error serializing invocation", e);
+            throw new UncheckedIOException(e);
         }
     }
 

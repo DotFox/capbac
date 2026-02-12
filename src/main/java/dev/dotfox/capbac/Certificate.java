@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
 public class Certificate {
     private final byte[] issuer;
@@ -50,7 +51,7 @@ public class Certificate {
             dos.write(capability);
             return bos.toByteArray();
         } catch (IOException e) {
-            throw new RuntimeException("Error serializing certificate", e);
+            throw new UncheckedIOException(e);
         }
     }
 

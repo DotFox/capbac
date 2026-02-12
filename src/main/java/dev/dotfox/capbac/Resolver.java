@@ -1,7 +1,9 @@
 package dev.dotfox.capbac;
 
+import java.util.Optional;
+
 import dev.dotfox.bls.BLSPublicKey;
 
 public interface Resolver {
-    BLSPublicKey resolve(byte[] id);
+    Optional<BLSPublicKey> resolve(byte[] id);
 }

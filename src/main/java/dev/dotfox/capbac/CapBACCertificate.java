@@ -5,11 +5,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import dev.dotfox.bls.BLSPublicKey;
 import dev.dotfox.bls.BLSSignature;
@@ -21,7 +23,7 @@ public class CapBACCertificate implements CapBACToken {
 
     public CapBACCertificate(CapBACScheme scheme, List<Certificate> certificateChain, BLSSignature aggregateSignature) {
         this.scheme = scheme;
-        this.certificateChain = certificateChain;
+        this.certificateChain = new ArrayList<>(certificateChain);
         this.aggregateSignature = aggregateSignature;
     }
 
@@ -60,11 +62,11 @@ public class CapBACCertificate implements CapBACToken {
         List<byte[]> messages = new ArrayList<>();
 
         for (Certificate cert : certificateChain) {
-            BLSPublicKey pk = resolver.resolve(cert.getIssuer());
-            if (pk == null) {
+            Optional<BLSPublicKey> pk = resolver.resolve(cert.getIssuer());
+            if (pk.isEmpty()) {
                 return false;
             }
-            publicKeys.add(pk);
+            publicKeys.add(pk.get());
             messages.add(cert.toBytes());
         }
 
@@ -87,7 +89,7 @@ public class CapBACCertificate implements CapBACToken {
             dos.write(sigBytes);
             return bos.toByteArray();
         } catch (IOException e) {
-            throw new RuntimeException("Error serializing certificate token", e);
+            throw new UncheckedIOException(e);
         }
     }
 

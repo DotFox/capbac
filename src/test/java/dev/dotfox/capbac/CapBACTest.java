@@ -81,7 +81,7 @@ public class CapBACTest {
         this.resolverMap.put(new ByteArrayWrapper(intermediateId), intermediateKeyPair.getPk());
         this.resolverMap.put(new ByteArrayWrapper(userId), userKeyPair.getPk());
 
-        this.resolver = id -> resolverMap.get(new ByteArrayWrapper(id));
+        this.resolver = id -> java.util.Optional.ofNullable(resolverMap.get(new ByteArrayWrapper(id)));
         this.trustChecker = id -> Arrays.equals(id, rootId);
     }
 

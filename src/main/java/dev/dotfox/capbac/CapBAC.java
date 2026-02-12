@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import dev.dotfox.bls.BLS;
 import dev.dotfox.bls.BLSSignature;
@@ -15,10 +16,10 @@ public class CapBAC<T extends Capability> {
     private final AttenuationChecker<T> checker;
 
     public CapBAC(CapBACScheme scheme, CapabilityCodec<T> codec, AttenuationChecker<T> checker) {
-        this.scheme = scheme;
+        this.scheme = Objects.requireNonNull(scheme, "scheme");
         this.bls = scheme.getBls();
-        this.codec = codec;
-        this.checker = checker;
+        this.codec = Objects.requireNonNull(codec, "codec");
+        this.checker = Objects.requireNonNull(checker, "checker");
     }
 
     public CapBACCertificate forgeCertificate(Principal issuer, byte[] subject, T capability,

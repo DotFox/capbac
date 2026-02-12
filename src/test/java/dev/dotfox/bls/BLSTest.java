@@ -61,7 +61,7 @@ public class BLSTest {
 
         // Assert that the public key has the correct length for the scheme
         byte[] pkBytes = keyPair.getPk().toBytes();
-        if (bls.getSchemeName() == "MINIMAL_PK scheme") {
+        if (bls.getSchemeName().equals("MINIMAL_PK scheme")) {
             assertEquals(48, pkBytes.length, "Public key should be 48 bytes for MINIMAL_PK scheme.");
         } else {
             assertEquals(96, pkBytes.length, "Public key should be 96 bytes for MINIMAL_SIG scheme.");
@@ -77,7 +77,7 @@ public class BLSTest {
 
         // Assert that the signature has the correct length for the scheme
         byte[] sigBytes = signature.getSignature().toBytes();
-        if (bls.getSchemeName() == "MINIMAL_SIG scheme") {
+        if (bls.getSchemeName().equals("MINIMAL_SIG scheme")) {
             assertEquals(48, sigBytes.length, "Signature should be 48 bytes for MINIMAL_SIG scheme.");
         } else {
             assertEquals(96, sigBytes.length, "Signature should be 96 bytes for MINIMAL_PK scheme.");
@@ -197,7 +197,7 @@ public class BLSTest {
         byte[] roguePkBytes;
         byte[] negativeRoguePkBytes;
 
-        if (bls.getSchemeName() == "MINIMAL_PK scheme") {
+        if (bls.getSchemeName().equals("MINIMAL_PK scheme")) {
             P1 roguePkPoint = new P1(rogueSk);
             roguePkBytes = roguePkPoint.to_affine().compress();
             negativeRoguePkBytes = roguePkPoint.neg().to_affine().compress();

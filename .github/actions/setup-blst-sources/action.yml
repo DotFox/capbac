@@ -1,0 +1,44 @@
+name: Setup BLST Sources
+description: Install SWIG, generate Java sources, download and place native libraries
+
+runs:
+  using: composite
+  steps:
+    - name: Install SWIG
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y swig
+
+    - name: Generate SWIG Java sources
+      shell: bash
+      working-directory: supranational/blst/bindings/java
+      run: |
+        PKG=supranational/blst
+        mkdir -p $PKG
+        swig -c++ -java -package supranational.blst -outdir $PKG \
+             -D__BLST_BYTES_T__ -o blst_wrap.cpp ../blst.swg
+
+    - name: Download all native library artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: native-libs
+
+    - name: Place native libraries into resource directories
+      shell: bash
+      run: |
+        BASE=supranational/blst/bindings/java/supranational/blst
+        for artifact_dir in native-libs/blst-*/; do
+          dir_name=$(basename "$artifact_dir")
+          os_name=$(echo "$dir_name" | sed 's/^blst-//' | sed 's/-[^-]*$//')
+          arch=$(echo "$dir_name" | sed 's/.*-//')
+
+          target_dir="$BASE/$os_name/$arch"
+          mkdir -p "$target_dir"
+
+          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) \
+            -exec cp {} "$target_dir/" \;
+
+          echo "Placed: $(ls "$target_dir") -> $target_dir"
+        done
+
+        echo "Final native library layout:"
+        find "$BASE" -type f

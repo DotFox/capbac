@@ -39,6 +39,13 @@ jobs:
           name: test-results
           path: target/surefire-reports/
 
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/site/jacoco/
+
   build-blst:
     name: Build blst (${{ matrix.os-name }}/${{ matrix.arch }})
     if: github.event_name == 'release'
@@ -228,42 +235,8 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Install SWIG
-        run: sudo apt-get update && sudo apt-get install -y swig
-
-      - name: Generate SWIG Java sources
-        working-directory: supranational/blst/bindings/java
-        run: |
-          PKG=supranational/blst
-          mkdir -p $PKG
-          swig -c++ -java -package supranational.blst -outdir $PKG \
-               -D__BLST_BYTES_T__ -o blst_wrap.cpp ../blst.swg
-
-      - name: Download all native library artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: native-libs
-
-      - name: Place native libraries into resource directories
-        run: |
-          BASE=supranational/blst/bindings/java/supranational/blst
-          for artifact_dir in native-libs/blst-*/; do
-            dir_name=$(basename "$artifact_dir")
-            # Extract OS name and arch from "blst-{OS}-{arch}"
-            os_name=$(echo "$dir_name" | sed 's/^blst-//' | sed 's/-[^-]*$//')
-            arch=$(echo "$dir_name" | sed 's/.*-//')
-
-            target_dir="$BASE/$os_name/$arch"
-            mkdir -p "$target_dir"
-
-            find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) \
-              -exec cp {} "$target_dir/" \;
-
-            echo "Placed: $(ls "$target_dir") -> $target_dir"
-          done
-
-          echo "Final native library layout:"
-          find "$BASE" -type f
+      - name: Setup BLST sources and native libraries
+        uses: ./.github/actions/setup-blst-sources
 
       - name: Build and test with Maven
         run: mvn clean test
@@ -289,36 +262,8 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Install SWIG
-        run: sudo apt-get update && sudo apt-get install -y swig
-
-      - name: Generate SWIG Java sources
-        working-directory: supranational/blst/bindings/java
-        run: |
-          PKG=supranational/blst
-          mkdir -p $PKG
-          swig -c++ -java -package supranational.blst -outdir $PKG \
-               -D__BLST_BYTES_T__ -o blst_wrap.cpp ../blst.swg
-
-      - name: Download all native library artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: native-libs
-
-      - name: Place native libraries into resource directories
-        run: |
-          BASE=supranational/blst/bindings/java/supranational/blst
-          for artifact_dir in native-libs/blst-*/; do
-            dir_name=$(basename "$artifact_dir")
-            os_name=$(echo "$dir_name" | sed 's/^blst-//' | sed 's/-[^-]*$//')
-            arch=$(echo "$dir_name" | sed 's/.*-//')
-
-            target_dir="$BASE/$os_name/$arch"
-            mkdir -p "$target_dir"
-
-            find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) \
-              -exec cp {} "$target_dir/" \;
-          done
+      - name: Setup BLST sources and native libraries
+        uses: ./.github/actions/setup-blst-sources
 
       - name: Publish to GitHub Packages
         run: mvn deploy -DskipTests

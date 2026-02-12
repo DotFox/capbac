@@ -2,9 +2,10 @@ package dev.dotfox.bls;
 
 import java.util.Base64;
 
+import dev.dotfox.bls.impl.ByteCodec;
 import dev.dotfox.bls.impl.Signature;
 
-public class BLSSignature {
+public class BLSSignature implements ByteCodec {
     private final Signature sig;
 
     public Signature getSignature() {
@@ -43,5 +44,10 @@ public class BLSSignature {
         } else if (!sig.equals(other.sig))
             return false;
         return true;
+    }
+
+    @Override
+    public byte[] toBytes() {
+        return sig.toBytes();
     }
 }

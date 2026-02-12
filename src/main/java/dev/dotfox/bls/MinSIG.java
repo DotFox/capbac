@@ -13,7 +13,7 @@ import dev.dotfox.bls.impl.blst.g1.BlstSignature;
 public final class MinSIG extends AbstractBLS {
 
     private static final BLS12381 impl = BlstLoader.INSTANCE_G1
-            .orElseThrow(() -> new BlsException("Failed to load BLST G1 library implementation."));
+            .orElseThrow(() -> new BlsException("Failed to load BLST G1 library implementation.", BlstLoader.getG1LoadFailure()));
     public static final MinSIG INSTANCE = new MinSIG();
 
     private MinSIG() {

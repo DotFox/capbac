@@ -13,7 +13,7 @@ import dev.dotfox.bls.impl.blst.g2.BlstSignature;
 public final class MinPK extends AbstractBLS {
 
     private static final BLS12381 impl = BlstLoader.INSTANCE_G2
-            .orElseThrow(() -> new BlsException("Failed to load BLST G2 library implementation."));
+            .orElseThrow(() -> new BlsException("Failed to load BLST G2 library implementation.", BlstLoader.getG2LoadFailure()));
     public static final MinPK INSTANCE = new MinPK();
 
     private MinPK() {

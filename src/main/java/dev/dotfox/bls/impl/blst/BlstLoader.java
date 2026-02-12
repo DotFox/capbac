@@ -9,6 +9,9 @@ public class BlstLoader {
     public static final Optional<BLS12381> INSTANCE_G1 = loadBlstG1();
     public static final Optional<BLS12381> INSTANCE_G2 = loadBlstG2();
 
+    private static Throwable g1LoadFailure;
+    private static Throwable g2LoadFailure;
+
     private static Optional<BLS12381> loadBlstG1() {
         try {
             Class.forName("supranational.blst.blstJNI");
@@ -21,6 +24,7 @@ public class BlstLoader {
                 | NoSuchMethodException
                 | IllegalAccessException
                 | ClassNotFoundException e) {
+            g1LoadFailure = e;
             return Optional.empty();
         }
     }
@@ -37,7 +41,16 @@ public class BlstLoader {
                 | NoSuchMethodException
                 | IllegalAccessException
                 | ClassNotFoundException e) {
+            g2LoadFailure = e;
             return Optional.empty();
         }
+    }
+
+    public static Throwable getG1LoadFailure() {
+        return g1LoadFailure;
+    }
+
+    public static Throwable getG2LoadFailure() {
+        return g2LoadFailure;
     }
 }

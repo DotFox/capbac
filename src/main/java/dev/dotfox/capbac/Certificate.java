@@ -7,24 +7,24 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 public class Certificate {
-    private final byte[] issuer;
-    private final byte[] subject;
+    private final PrincipalId issuer;
+    private final PrincipalId subject;
     private final long expiration;
     private final byte[] capability;
 
-    public Certificate(byte[] issuer, byte[] subject, long expiration, byte[] capability) {
-        this.issuer = issuer.clone();
-        this.subject = subject.clone();
+    public Certificate(PrincipalId issuer, PrincipalId subject, long expiration, byte[] capability) {
+        this.issuer = issuer;
+        this.subject = subject;
         this.expiration = expiration;
         this.capability = capability.clone();
     }
 
-    public byte[] getIssuer() {
-        return issuer.clone();
+    public PrincipalId getIssuer() {
+        return issuer;
     }
 
-    public byte[] getSubject() {
-        return subject.clone();
+    public PrincipalId getSubject() {
+        return subject;
     }
 
     public long getExpiration() {
@@ -42,10 +42,12 @@ public class Certificate {
     public byte[] toBytes() {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 DataOutputStream dos = new DataOutputStream(bos)) {
-            dos.writeInt(issuer.length);
-            dos.write(issuer);
-            dos.writeInt(subject.length);
-            dos.write(subject);
+            byte[] issuerBytes = issuer.toBytes();
+            dos.writeInt(issuerBytes.length);
+            dos.write(issuerBytes);
+            byte[] subjectBytes = subject.toBytes();
+            dos.writeInt(subjectBytes.length);
+            dos.write(subjectBytes);
             dos.writeLong(expiration);
             dos.writeInt(capability.length);
             dos.write(capability);
@@ -78,6 +80,6 @@ public class Certificate {
         byte[] capBytes = new byte[capLength];
         dis.readFully(capBytes);
 
-        return new Certificate(issuer, subject, expiration, capBytes);
+        return new Certificate(new PrincipalId(issuer), new PrincipalId(subject), expiration, capBytes);
     }
 }

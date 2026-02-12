@@ -7,18 +7,18 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 public class Invocation {
-    private final byte[] invoker;
+    private final PrincipalId invoker;
     private final long expiration;
     private final byte[] capability;
 
-    public Invocation(byte[] invoker, long expiration, byte[] capability) {
-        this.invoker = invoker.clone();
+    public Invocation(PrincipalId invoker, long expiration, byte[] capability) {
+        this.invoker = invoker;
         this.expiration = expiration;
         this.capability = capability.clone();
     }
 
-    public byte[] getInvoker() {
-        return invoker.clone();
+    public PrincipalId getInvoker() {
+        return invoker;
     }
 
     public long getExpiration() {
@@ -36,8 +36,9 @@ public class Invocation {
     public byte[] toBytes() {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 DataOutputStream dos = new DataOutputStream(bos)) {
-            dos.writeInt(invoker.length);
-            dos.write(invoker);
+            byte[] invokerBytes = invoker.toBytes();
+            dos.writeInt(invokerBytes.length);
+            dos.write(invokerBytes);
             dos.writeLong(expiration);
             dos.writeInt(capability.length);
             dos.write(capability);
@@ -66,6 +67,6 @@ public class Invocation {
         byte[] capBytes = new byte[capLength];
         dis.readFully(capBytes);
 
-        return new Invocation(invoker, expiration, capBytes);
+        return new Invocation(new PrincipalId(invoker), expiration, capBytes);
     }
 }

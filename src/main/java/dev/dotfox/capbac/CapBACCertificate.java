@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -43,7 +42,7 @@ public class CapBACCertificate implements CapBACToken {
 
         // 3. Verify delegation chain
         for (int i = 0; i < certificateChain.size() - 1; i++) {
-            if (!Arrays.equals(certificateChain.get(i).getSubject(), certificateChain.get(i + 1).getIssuer())) {
+            if (!certificateChain.get(i).getSubject().equals(certificateChain.get(i + 1).getIssuer())) {
                 return false;
             }
         }

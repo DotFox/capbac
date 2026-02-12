@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -46,7 +45,7 @@ public class CapBACInvocation implements CapBACToken {
 
         // 3. Verify delegation chain
         for (int i = 0; i < certificateChain.size() - 1; i++) {
-            if (!Arrays.equals(certificateChain.get(i).getSubject(), certificateChain.get(i + 1).getIssuer())) {
+            if (!certificateChain.get(i).getSubject().equals(certificateChain.get(i + 1).getIssuer())) {
                 return false;
             }
         }
@@ -61,7 +60,7 @@ public class CapBACInvocation implements CapBACToken {
         }
 
         // 4. Verify final link to invoker
-        if (!Arrays.equals(certificateChain.get(certificateChain.size() - 1).getSubject(), invocation.getInvoker())) {
+        if (!certificateChain.get(certificateChain.size() - 1).getSubject().equals(invocation.getInvoker())) {
             return false;
         }
 

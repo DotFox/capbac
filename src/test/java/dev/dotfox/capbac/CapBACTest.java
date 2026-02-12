@@ -30,11 +30,11 @@ public class CapBACTest {
     private BLSKeyPair intermediateKeyPair;
     private BLSKeyPair userKeyPair;
 
-    private byte[] rootId;
-    private byte[] intermediateId;
-    private byte[] userId;
+    private PrincipalId rootId;
+    private PrincipalId intermediateId;
+    private PrincipalId userId;
 
-    private Map<ByteArrayWrapper, BLSPublicKey> resolverMap;
+    private Map<PrincipalId, BLSPublicKey> resolverMap;
     private Resolver resolver;
     private TrustChecker trustChecker;
 
@@ -42,47 +42,23 @@ public class CapBACTest {
     private static final AttenuationChecker<StringCapability> CHECKER =
             (parent, child) -> child.getValue().startsWith(parent.getValue());
 
-    // Wrapper class to use byte[] as a key in a Map
-    private static class ByteArrayWrapper {
-        private final byte[] data;
-
-        public ByteArrayWrapper(byte[] data) {
-            this.data = data;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
-            ByteArrayWrapper that = (ByteArrayWrapper) o;
-            return Arrays.equals(data, that.data);
-        }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(data);
-        }
-    }
-
     void setupForScheme(CapBACScheme scheme) {
         this.bls = scheme.getBls();
         this.rootKeyPair = this.bls.keyGen();
         this.intermediateKeyPair = this.bls.keyGen();
         this.userKeyPair = this.bls.keyGen();
 
-        this.rootId = this.rootKeyPair.getPk().toBytes();
-        this.intermediateId = this.intermediateKeyPair.getPk().toBytes();
-        this.userId = this.userKeyPair.getPk().toBytes();
+        this.rootId = new PrincipalId(this.rootKeyPair.getPk().toBytes());
+        this.intermediateId = new PrincipalId(this.intermediateKeyPair.getPk().toBytes());
+        this.userId = new PrincipalId(this.userKeyPair.getPk().toBytes());
 
         this.resolverMap = new HashMap<>();
-        this.resolverMap.put(new ByteArrayWrapper(rootId), rootKeyPair.getPk());
-        this.resolverMap.put(new ByteArrayWrapper(intermediateId), intermediateKeyPair.getPk());
-        this.resolverMap.put(new ByteArrayWrapper(userId), userKeyPair.getPk());
+        this.resolverMap.put(rootId, rootKeyPair.getPk());
+        this.resolverMap.put(intermediateId, intermediateKeyPair.getPk());
+        this.resolverMap.put(userId, userKeyPair.getPk());
 
-        this.resolver = id -> java.util.Optional.ofNullable(resolverMap.get(new ByteArrayWrapper(id)));
-        this.trustChecker = id -> Arrays.equals(id, rootId);
+        this.resolver = id -> java.util.Optional.ofNullable(resolverMap.get(id));
+        this.trustChecker = id -> id.equals(rootId);
     }
 
     private CapBACInvocation createValidInvocationToken(CapBACScheme scheme, long expiration) {
@@ -90,7 +66,7 @@ public class CapBACTest {
         Invocation invocation = new Invocation(userId, expiration, chain.get(1).getRawCapability());
 
         List<BLSSignature> signatures = chain.stream().map(cert -> {
-            if (Arrays.equals(cert.getIssuer(), rootId))
+            if (cert.getIssuer().equals(rootId))
                 return bls.sign(rootKeyPair.getSk(), cert.toBytes());
             return bls.sign(intermediateKeyPair.getSk(), cert.toBytes());
         }).collect(Collectors.toList());
@@ -104,7 +80,7 @@ public class CapBACTest {
         List<Certificate> chain = createCertificateChain(expiration);
 
         List<BLSSignature> signatures = chain.stream().map(cert -> {
-            if (Arrays.equals(cert.getIssuer(), rootId))
+            if (cert.getIssuer().equals(rootId))
                 return bls.sign(rootKeyPair.getSk(), cert.toBytes());
             return bls.sign(intermediateKeyPair.getSk(), cert.toBytes());
         }).collect(Collectors.toList());
@@ -250,8 +226,8 @@ public class CapBACTest {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             BLSKeyPair anotherKeyPair = bls.keyGen();
-            byte[] anotherId = anotherKeyPair.getPk().toBytes();
-            resolverMap.put(new ByteArrayWrapper(anotherId), anotherKeyPair.getPk());
+            PrincipalId anotherId = new PrincipalId(anotherKeyPair.getPk().toBytes());
+            resolverMap.put(anotherId, anotherKeyPair.getPk());
 
             // Create a broken chain
             byte[] cap1Bytes = new StringCapability("read").toBytes();
@@ -281,7 +257,7 @@ public class CapBACTest {
             // Root grants "read:/data/file.txt" (narrow)
             byte[] cap1Bytes = new StringCapability("read:/data/file.txt").toBytes();
             Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
-            // Intermediate delegates "read" (broader than parent) — escalation
+            // Intermediate delegates "read:/data/file.txt"
             byte[] cap2Bytes = new StringCapability("read:/data/file.txt").toBytes();
             Certificate cert2 = new Certificate(intermediateId, userId, validExpiration, cap2Bytes);
             List<Certificate> chain = Arrays.asList(cert1, cert2);
@@ -325,8 +301,8 @@ public class CapBACTest {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             BLSKeyPair anotherKeyPair = bls.keyGen();
-            byte[] anotherId = anotherKeyPair.getPk().toBytes();
-            resolverMap.put(new ByteArrayWrapper(anotherId), anotherKeyPair.getPk());
+            PrincipalId anotherId = new PrincipalId(anotherKeyPair.getPk().toBytes());
+            resolverMap.put(anotherId, anotherKeyPair.getPk());
 
             // Create a broken chain: cert2 issuer doesn't match cert1 subject
             byte[] cap1Bytes = new StringCapability("read").toBytes();
@@ -352,7 +328,7 @@ public class CapBACTest {
             // Root grants "read:/data/file.txt" (narrow)
             byte[] cap1Bytes = new StringCapability("read:/data/file.txt").toBytes();
             Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
-            // Intermediate delegates "read" (broader than parent) — escalation
+            // Intermediate delegates "write" (broader than parent) — escalation
             byte[] cap2Bytes = new StringCapability("write").toBytes();
             Certificate cert2 = new Certificate(intermediateId, userId, validExpiration, cap2Bytes);
             List<Certificate> chain = Arrays.asList(cert1, cert2);

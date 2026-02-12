@@ -22,21 +22,21 @@ public class CapBAC<T extends Capability> {
         this.checker = Objects.requireNonNull(checker, "checker");
     }
 
-    public CapBACCertificate forgeCertificate(Principal issuer, byte[] subject, T capability,
+    public CapBACCertificate forgeCertificate(Principal issuer, PrincipalId subject, T capability,
             long expiration) {
         Certificate cert = new Certificate(issuer.getId(), subject, expiration, capability.toBytes());
         BLSSignature signature = issuer.sign(cert.toBytes());
         return new CapBACCertificate(scheme, Collections.singletonList(cert), signature);
     }
 
-    public CapBACCertificate delegateCertificate(Principal issuer, CapBACCertificate originalToken, byte[] subject,
+    public CapBACCertificate delegateCertificate(Principal issuer, CapBACCertificate originalToken, PrincipalId subject,
             T capability, long expiration) throws IOException {
         if (originalToken.getCertificateChain().isEmpty()) {
             throw new IllegalArgumentException("Cannot delegate an empty certificate chain.");
         }
 
         Certificate lastCert = originalToken.getCertificateChain().get(originalToken.getCertificateChain().size() - 1);
-        if (!java.util.Arrays.equals(lastCert.getSubject(), issuer.getId())) {
+        if (!lastCert.getSubject().equals(issuer.getId())) {
             throw new IllegalArgumentException("Issuer is not the subject of the last certificate in the chain.");
         }
 
@@ -64,7 +64,7 @@ public class CapBAC<T extends Capability> {
         }
 
         Certificate lastCert = originalToken.getCertificateChain().get(originalToken.getCertificateChain().size() - 1);
-        if (!java.util.Arrays.equals(lastCert.getSubject(), invoker.getId())) {
+        if (!lastCert.getSubject().equals(invoker.getId())) {
             throw new IllegalArgumentException("Invoker is not the subject of the last certificate in the chain.");
         }
 

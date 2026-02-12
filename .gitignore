@@ -8,3 +8,6 @@ target/
 .settings/
 .classpath
 dependency-reduced-pom.xml
+.externalToolBuilders/
+.project
+maven-eclipse.xml

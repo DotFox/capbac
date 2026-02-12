@@ -10,6 +10,10 @@ public class StringCapability implements Capability {
         this.value = Objects.requireNonNull(value, "value must not be null");
     }
 
+    public String getValue() {
+        return value;
+    }
+
     @Override
     public byte[] toBytes() {
         return value.getBytes(StandardCharsets.UTF_8);

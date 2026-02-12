@@ -9,7 +9,11 @@ public interface CapBACToken {
     byte TYPE_CERTIFICATE = 0x01;
     byte TYPE_INVOCATION = 0x02;
 
-    boolean verify(Resolver resolver, TrustChecker trustChecker);
+    <T extends Capability> boolean verify(
+            Resolver resolver,
+            TrustChecker trustChecker,
+            CapabilityCodec<T> codec,
+            AttenuationChecker<T> checker) throws IOException;
 
     byte[] toBytes();
 

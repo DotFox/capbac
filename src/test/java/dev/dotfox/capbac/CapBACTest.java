@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,6 +37,10 @@ public class CapBACTest {
     private Map<ByteArrayWrapper, BLSPublicKey> resolverMap;
     private Resolver resolver;
     private TrustChecker trustChecker;
+
+    private static final StringCapabilityCodec CODEC = new StringCapabilityCodec();
+    private static final AttenuationChecker<StringCapability> CHECKER =
+            (parent, child) -> child.getValue().startsWith(parent.getValue());
 
     // Wrapper class to use byte[] as a key in a Map
     private static class ByteArrayWrapper {
@@ -122,9 +125,9 @@ public class CapBACTest {
     class HighLevelAPITests {
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testForgeDelegateAndInvoke(CapBACScheme scheme) {
+        void testForgeDelegateAndInvoke(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
-            CapBAC api = new CapBAC(scheme);
+            CapBAC<StringCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
 
             Principal rootPrincipal = new Principal(bls, rootKeyPair);
             Principal intermediatePrincipal = new Principal(bls, intermediateKeyPair);
@@ -137,17 +140,17 @@ public class CapBACTest {
             // 1. Forge
             CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(), readCap,
                     expiration);
-            assertTrue(rootCert.verify(resolver, trustChecker));
+            assertTrue(rootCert.verify(resolver, trustChecker, CODEC, CHECKER));
 
             // 2. Delegate
             CapBACCertificate delegatedCert = api.delegateCertificate(intermediatePrincipal, rootCert,
                     userPrincipal.getId(),
                     fileCap, expiration);
-            assertTrue(delegatedCert.verify(resolver, trustChecker));
+            assertTrue(delegatedCert.verify(resolver, trustChecker, CODEC, CHECKER));
 
             // 3. Invoke
             CapBACInvocation invocationToken = api.invoke(userPrincipal, delegatedCert, fileCap, expiration);
-            assertTrue(invocationToken.verify(resolver, trustChecker));
+            assertTrue(invocationToken.verify(resolver, trustChecker, CODEC, CHECKER));
         }
     }
 
@@ -155,11 +158,11 @@ public class CapBACTest {
     class InvocationTokenTests {
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testTokenCreationAndVerification(CapBACScheme scheme) {
+        void testTokenCreationAndVerification(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             CapBACInvocation token = createValidInvocationToken(scheme, validExpiration);
-            assertTrue(token.verify(resolver, trustChecker), "Invocation token should be valid");
+            assertTrue(token.verify(resolver, trustChecker, CODEC, CHECKER), "Invocation token should be valid");
         }
 
         @ParameterizedTest
@@ -173,7 +176,7 @@ public class CapBACTest {
             CapBACToken deserializedToken = CapBACToken.fromBytes(serializedToken);
 
             assertTrue(deserializedToken instanceof CapBACInvocation);
-            assertTrue(deserializedToken.verify(resolver, trustChecker),
+            assertTrue(deserializedToken.verify(resolver, trustChecker, CODEC, CHECKER),
                     "Deserialized invocation token should be valid");
         }
 
@@ -198,11 +201,11 @@ public class CapBACTest {
     class CertificateTokenTests {
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testTokenCreationAndVerification(CapBACScheme scheme) {
+        void testTokenCreationAndVerification(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             CapBACCertificate token = createValidCertificateToken(scheme, validExpiration);
-            assertTrue(token.verify(resolver, trustChecker), "Certificate token should be valid");
+            assertTrue(token.verify(resolver, trustChecker, CODEC, CHECKER), "Certificate token should be valid");
         }
 
         @ParameterizedTest
@@ -216,7 +219,7 @@ public class CapBACTest {
             CapBACToken deserializedToken = CapBACToken.fromBytes(serializedToken);
 
             assertTrue(deserializedToken instanceof CapBACCertificate);
-            assertTrue(deserializedToken.verify(resolver, trustChecker),
+            assertTrue(deserializedToken.verify(resolver, trustChecker, CODEC, CHECKER),
                     "Deserialized certificate token should be valid");
         }
     }
@@ -225,25 +228,25 @@ public class CapBACTest {
     class InvocationTokenFailures {
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testFail_ExpiredToken(CapBACScheme scheme) {
+        void testFail_ExpiredToken(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long pastExpiration = Instant.now().getEpochSecond() - 3600;
             CapBACInvocation token = createValidInvocationToken(scheme, pastExpiration);
-            assertFalse(token.verify(resolver, trustChecker));
+            assertFalse(token.verify(resolver, trustChecker, CODEC, CHECKER));
         }
 
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testFail_UntrustedRoot(CapBACScheme scheme) {
+        void testFail_UntrustedRoot(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             CapBACInvocation token = createValidInvocationToken(scheme, validExpiration);
-            assertFalse(token.verify(resolver, id -> false));
+            assertFalse(token.verify(resolver, id -> false, CODEC, CHECKER));
         }
 
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testFail_BrokenDelegationChain(CapBACScheme scheme) {
+        void testFail_BrokenDelegationChain(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             BLSKeyPair anotherKeyPair = bls.keyGen();
@@ -266,7 +269,33 @@ public class CapBACTest {
 
             CapBACInvocation token = new CapBACInvocation(scheme, brokenChain, invocation,
                     aggregateSignature);
-            assertFalse(token.verify(resolver, trustChecker));
+            assertFalse(token.verify(resolver, trustChecker, CODEC, CHECKER));
+        }
+
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_AttenuationViolation(CapBACScheme scheme) throws IOException {
+            setupForScheme(scheme);
+            long validExpiration = Instant.now().getEpochSecond() + 3600;
+
+            // Root grants "read:/data/file.txt" (narrow)
+            byte[] cap1Bytes = new StringCapability("read:/data/file.txt").toBytes();
+            Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
+            // Intermediate delegates "read" (broader than parent) — escalation
+            byte[] cap2Bytes = new StringCapability("read:/data/file.txt").toBytes();
+            Certificate cert2 = new Certificate(intermediateId, userId, validExpiration, cap2Bytes);
+            List<Certificate> chain = Arrays.asList(cert1, cert2);
+
+            // Invocation uses "read" — broader than last cert
+            Invocation invocation = new Invocation(userId, validExpiration, new StringCapability("read").toBytes());
+
+            BLSSignature sig1 = bls.sign(rootKeyPair.getSk(), cert1.toBytes());
+            BLSSignature sig2 = bls.sign(intermediateKeyPair.getSk(), cert2.toBytes());
+            BLSSignature sig3 = bls.sign(userKeyPair.getSk(), invocation.toBytes());
+            BLSSignature aggregateSignature = bls.aggregate(Arrays.asList(sig1, sig2, sig3));
+
+            CapBACInvocation token = new CapBACInvocation(scheme, chain, invocation, aggregateSignature);
+            assertFalse(token.verify(resolver, trustChecker, CODEC, CHECKER));
         }
     }
 
@@ -274,25 +303,25 @@ public class CapBACTest {
     class CertificateTokenFailures {
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testFail_ExpiredToken(CapBACScheme scheme) {
+        void testFail_ExpiredToken(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long pastExpiration = Instant.now().getEpochSecond() - 3600;
             CapBACCertificate token = createValidCertificateToken(scheme, pastExpiration);
-            assertFalse(token.verify(resolver, trustChecker));
+            assertFalse(token.verify(resolver, trustChecker, CODEC, CHECKER));
         }
 
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testFail_UntrustedRoot(CapBACScheme scheme) {
+        void testFail_UntrustedRoot(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             CapBACCertificate token = createValidCertificateToken(scheme, validExpiration);
-            assertFalse(token.verify(resolver, id -> false));
+            assertFalse(token.verify(resolver, id -> false, CODEC, CHECKER));
         }
 
         @ParameterizedTest
         @EnumSource(CapBACScheme.class)
-        void testFail_BrokenDelegationChain(CapBACScheme scheme) {
+        void testFail_BrokenDelegationChain(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             BLSKeyPair anotherKeyPair = bls.keyGen();
@@ -311,7 +340,76 @@ public class CapBACTest {
             BLSSignature aggregateSignature = bls.aggregate(Arrays.asList(sig1, sig2));
 
             CapBACCertificate token = new CapBACCertificate(scheme, brokenChain, aggregateSignature);
-            assertFalse(token.verify(resolver, trustChecker));
+            assertFalse(token.verify(resolver, trustChecker, CODEC, CHECKER));
+        }
+
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_AttenuationViolation(CapBACScheme scheme) throws IOException {
+            setupForScheme(scheme);
+            long validExpiration = Instant.now().getEpochSecond() + 3600;
+
+            // Root grants "read:/data/file.txt" (narrow)
+            byte[] cap1Bytes = new StringCapability("read:/data/file.txt").toBytes();
+            Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
+            // Intermediate delegates "read" (broader than parent) — escalation
+            byte[] cap2Bytes = new StringCapability("write").toBytes();
+            Certificate cert2 = new Certificate(intermediateId, userId, validExpiration, cap2Bytes);
+            List<Certificate> chain = Arrays.asList(cert1, cert2);
+
+            BLSSignature sig1 = bls.sign(rootKeyPair.getSk(), cert1.toBytes());
+            BLSSignature sig2 = bls.sign(intermediateKeyPair.getSk(), cert2.toBytes());
+            BLSSignature aggregateSignature = bls.aggregate(Arrays.asList(sig1, sig2));
+
+            CapBACCertificate token = new CapBACCertificate(scheme, chain, aggregateSignature);
+            assertFalse(token.verify(resolver, trustChecker, CODEC, CHECKER));
+        }
+    }
+
+    @Nested
+    class AttenuationEnforcementTests {
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_DelegateWithBroaderCapability(CapBACScheme scheme) throws IOException {
+            setupForScheme(scheme);
+            CapBAC<StringCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
+
+            Principal rootPrincipal = new Principal(bls, rootKeyPair);
+            Principal intermediatePrincipal = new Principal(bls, intermediateKeyPair);
+
+            long expiration = Instant.now().getEpochSecond() + 3600;
+            StringCapability narrowCap = new StringCapability("read:/data/file.txt");
+            StringCapability broadCap = new StringCapability("write");
+
+            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(), narrowCap,
+                    expiration);
+
+            assertThrows(IllegalArgumentException.class, () ->
+                    api.delegateCertificate(intermediatePrincipal, rootCert, userId, broadCap, expiration));
+        }
+
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_InvokeWithBroaderCapability(CapBACScheme scheme) throws IOException {
+            setupForScheme(scheme);
+            CapBAC<StringCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
+
+            Principal rootPrincipal = new Principal(bls, rootKeyPair);
+            Principal intermediatePrincipal = new Principal(bls, intermediateKeyPair);
+            Principal userPrincipal = new Principal(bls, userKeyPair);
+
+            long expiration = Instant.now().getEpochSecond() + 3600;
+            StringCapability readCap = new StringCapability("read");
+            StringCapability fileCap = new StringCapability("read:/data/file.txt");
+            StringCapability broadCap = new StringCapability("write");
+
+            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(), readCap,
+                    expiration);
+            CapBACCertificate delegatedCert = api.delegateCertificate(intermediatePrincipal, rootCert,
+                    userPrincipal.getId(), fileCap, expiration);
+
+            assertThrows(IllegalArgumentException.class, () ->
+                    api.invoke(userPrincipal, delegatedCert, broadCap, expiration));
         }
     }
 

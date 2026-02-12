@@ -29,7 +29,8 @@ public class CapBACInvocation implements CapBACToken {
     }
 
     @Override
-    public boolean verify(Resolver resolver, TrustChecker trustChecker) {
+    public <T extends Capability> boolean verify(Resolver resolver, TrustChecker trustChecker,
+            CapabilityCodec<T> codec, AttenuationChecker<T> checker) throws IOException {
         // 1. Check expiration
         long now = Instant.now().getEpochSecond();
         if (invocation.getExpiration() < now || certificateChain.stream().anyMatch(c -> c.getExpiration() < now)) {
@@ -48,8 +49,24 @@ public class CapBACInvocation implements CapBACToken {
             }
         }
 
+        // 3b. Verify attenuation across certificate chain
+        for (int i = 0; i < certificateChain.size() - 1; i++) {
+            T parentCap = certificateChain.get(i).getCapability(codec);
+            T childCap = certificateChain.get(i + 1).getCapability(codec);
+            if (!checker.isValidAttenuation(parentCap, childCap)) {
+                return false;
+            }
+        }
+
         // 4. Verify final link to invoker
         if (!Arrays.equals(certificateChain.get(certificateChain.size() - 1).getSubject(), invocation.getInvoker())) {
+            return false;
+        }
+
+        // 4b. Verify attenuation from last certificate to invocation
+        T lastCertCap = certificateChain.get(certificateChain.size() - 1).getCapability(codec);
+        T invocationCap = invocation.getCapability(codec);
+        if (!checker.isValidAttenuation(lastCertCap, invocationCap)) {
             return false;
         }
 

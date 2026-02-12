@@ -1,22 +1,27 @@
 package dev.dotfox.capbac;
 
-import dev.dotfox.bls.BLS;
-import dev.dotfox.bls.BLSSignature;
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class CapBAC {
+import dev.dotfox.bls.BLS;
+import dev.dotfox.bls.BLSSignature;
+
+public class CapBAC<T extends Capability> {
     private final CapBACScheme scheme;
     private final BLS bls;
+    private final CapabilityCodec<T> codec;
+    private final AttenuationChecker<T> checker;
 
-    public CapBAC(CapBACScheme scheme) {
+    public CapBAC(CapBACScheme scheme, CapabilityCodec<T> codec, AttenuationChecker<T> checker) {
         this.scheme = scheme;
         this.bls = scheme.getBls();
+        this.codec = codec;
+        this.checker = checker;
     }
 
-    public CapBACCertificate forgeCertificate(Principal issuer, byte[] subject, Capability capability,
+    public CapBACCertificate forgeCertificate(Principal issuer, byte[] subject, T capability,
             long expiration) {
         Certificate cert = new Certificate(issuer.getId(), subject, expiration, capability.toBytes());
         BLSSignature signature = issuer.sign(cert.toBytes());
@@ -24,7 +29,7 @@ public class CapBAC {
     }
 
     public CapBACCertificate delegateCertificate(Principal issuer, CapBACCertificate originalToken, byte[] subject,
-            Capability capability, long expiration) {
+            T capability, long expiration) throws IOException {
         if (originalToken.getCertificateChain().isEmpty()) {
             throw new IllegalArgumentException("Cannot delegate an empty certificate chain.");
         }
@@ -32,6 +37,11 @@ public class CapBAC {
         Certificate lastCert = originalToken.getCertificateChain().get(originalToken.getCertificateChain().size() - 1);
         if (!java.util.Arrays.equals(lastCert.getSubject(), issuer.getId())) {
             throw new IllegalArgumentException("Issuer is not the subject of the last certificate in the chain.");
+        }
+
+        T parentCap = lastCert.getCapability(codec);
+        if (!checker.isValidAttenuation(parentCap, capability)) {
+            throw new IllegalArgumentException("Capability is not a valid attenuation of the parent capability.");
         }
 
         Certificate newCert = new Certificate(issuer.getId(), subject, expiration, capability.toBytes());
@@ -46,8 +56,8 @@ public class CapBAC {
         return new CapBACCertificate(scheme, newChain, aggregateSignature);
     }
 
-    public CapBACInvocation invoke(Principal invoker, CapBACCertificate originalToken, Capability capability,
-            long expiration) {
+    public CapBACInvocation invoke(Principal invoker, CapBACCertificate originalToken, T capability,
+            long expiration) throws IOException {
         if (originalToken.getCertificateChain().isEmpty()) {
             throw new IllegalArgumentException("Cannot invoke an empty certificate chain.");
         }
@@ -55,6 +65,11 @@ public class CapBAC {
         Certificate lastCert = originalToken.getCertificateChain().get(originalToken.getCertificateChain().size() - 1);
         if (!java.util.Arrays.equals(lastCert.getSubject(), invoker.getId())) {
             throw new IllegalArgumentException("Invoker is not the subject of the last certificate in the chain.");
+        }
+
+        T lastCertCap = lastCert.getCapability(codec);
+        if (!checker.isValidAttenuation(lastCertCap, capability)) {
+            throw new IllegalArgumentException("Capability is not a valid attenuation of the last certificate capability.");
         }
 
         Invocation invocation = new Invocation(invoker.getId(), expiration, capability.toBytes());

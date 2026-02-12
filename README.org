@@ -67,7 +67,7 @@ Principal user = new Principal(scheme);
 
 // The resolver would typically be backed by a database.
 Resolver resolver = id -> { /* ... logic to get public key for an id ... */ };
-TrustChecker trustChecker = id -> java.util.Arrays.equals(id, root.getId());
+TrustChecker trustChecker = id -> id.equals(root.getId());
 
 long expiration = Instant.now().getEpochSecond() + 3600; // Expires in 1 hour
 
@@ -131,6 +131,26 @@ The library uses an *implicit revocation* model. Revocation is handled by the =R
 
 *** Replay Attacks
 The tokens include an =expiration= timestamp to mitigate replay attacks. For systems requiring higher security, it is recommended to embed a *nonce* or unique ID within the =Capability= object itself. The verifying service would then be responsible for tracking seen nonces to ensure a token can only be used once.
+
+-----
+
+** Usage Examples
+
+The =src/test/java/dev/dotfox/capbac/examples/= directory contains self-contained example tests that demonstrate real-world use cases:
+
+- =AuthenticationExampleTest=: User registration via proof-of-key, API token issuance, bot delegation, and revocation.
+- =DeviceManufacturingExampleTest=: 3-hop supply chain (manufacturer → factory → batch → device) with hierarchical revocation.
+- =SmartHomeExampleTest=: Time-limited guest access with expiry, attenuation enforcement, and chain invalidation.
+- =MicroserviceAuthExampleTest=: Service-to-service auth with resource + action capabilities and least-privilege delegation.
+- =DocumentSharingExampleTest=: Ordinal permission hierarchy (EDIT → COMMENT → VIEW) with cascading revocation.
+
+Each example defines its own =Capability= type, =CapabilityCodec=, and =AttenuationChecker= as inner classes, and runs under both =MIN_PK= and =MIN_SIG= schemes.
+
+-----
+
+** Serialization Format
+
+The binary wire format for =CapBACCertificate= and =CapBACInvocation= tokens is documented in [[file:docs/serialization-format.md][docs/serialization-format.md]].
 
 -----
 

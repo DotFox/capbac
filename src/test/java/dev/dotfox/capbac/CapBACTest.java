@@ -223,27 +223,28 @@ public class CapBACTest {
 
     @Nested
     class InvocationTokenFailures {
-        @BeforeEach
-        void nestedSetup() {
-            setupForScheme(CapBACScheme.MIN_PK);
-        }
-
-        @Test
-        void testFail_ExpiredToken() {
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_ExpiredToken(CapBACScheme scheme) {
+            setupForScheme(scheme);
             long pastExpiration = Instant.now().getEpochSecond() - 3600;
-            CapBACInvocation token = createValidInvocationToken(CapBACScheme.MIN_PK, pastExpiration);
+            CapBACInvocation token = createValidInvocationToken(scheme, pastExpiration);
             assertFalse(token.verify(resolver, trustChecker));
         }
 
-        @Test
-        void testFail_UntrustedRoot() {
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_UntrustedRoot(CapBACScheme scheme) {
+            setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
-            CapBACInvocation token = createValidInvocationToken(CapBACScheme.MIN_PK, validExpiration);
+            CapBACInvocation token = createValidInvocationToken(scheme, validExpiration);
             assertFalse(token.verify(resolver, id -> false));
         }
 
-        @Test
-        void testFail_BrokenDelegationChain() {
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_BrokenDelegationChain(CapBACScheme scheme) {
+            setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
             BLSKeyPair anotherKeyPair = bls.keyGen();
             byte[] anotherId = anotherKeyPair.getPk().toBytes();
@@ -263,8 +264,53 @@ public class CapBACTest {
             BLSSignature sig3 = bls.sign(anotherKeyPair.getSk(), invocation.toBytes());
             BLSSignature aggregateSignature = bls.aggregate(Arrays.asList(sig1, sig2, sig3));
 
-            CapBACInvocation token = new CapBACInvocation(CapBACScheme.MIN_PK, brokenChain, invocation,
+            CapBACInvocation token = new CapBACInvocation(scheme, brokenChain, invocation,
                     aggregateSignature);
+            assertFalse(token.verify(resolver, trustChecker));
+        }
+    }
+
+    @Nested
+    class CertificateTokenFailures {
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_ExpiredToken(CapBACScheme scheme) {
+            setupForScheme(scheme);
+            long pastExpiration = Instant.now().getEpochSecond() - 3600;
+            CapBACCertificate token = createValidCertificateToken(scheme, pastExpiration);
+            assertFalse(token.verify(resolver, trustChecker));
+        }
+
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_UntrustedRoot(CapBACScheme scheme) {
+            setupForScheme(scheme);
+            long validExpiration = Instant.now().getEpochSecond() + 3600;
+            CapBACCertificate token = createValidCertificateToken(scheme, validExpiration);
+            assertFalse(token.verify(resolver, id -> false));
+        }
+
+        @ParameterizedTest
+        @EnumSource(CapBACScheme.class)
+        void testFail_BrokenDelegationChain(CapBACScheme scheme) {
+            setupForScheme(scheme);
+            long validExpiration = Instant.now().getEpochSecond() + 3600;
+            BLSKeyPair anotherKeyPair = bls.keyGen();
+            byte[] anotherId = anotherKeyPair.getPk().toBytes();
+            resolverMap.put(new ByteArrayWrapper(anotherId), anotherKeyPair.getPk());
+
+            // Create a broken chain: cert2 issuer doesn't match cert1 subject
+            byte[] cap1Bytes = new StringCapability("read").toBytes();
+            Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
+            byte[] cap2Bytes = new StringCapability("read:/data/file.txt").toBytes();
+            Certificate cert2 = new Certificate(anotherId, userId, validExpiration, cap2Bytes);
+            List<Certificate> brokenChain = Arrays.asList(cert1, cert2);
+
+            BLSSignature sig1 = bls.sign(rootKeyPair.getSk(), cert1.toBytes());
+            BLSSignature sig2 = bls.sign(anotherKeyPair.getSk(), cert2.toBytes());
+            BLSSignature aggregateSignature = bls.aggregate(Arrays.asList(sig1, sig2));
+
+            CapBACCertificate token = new CapBACCertificate(scheme, brokenChain, aggregateSignature);
             assertFalse(token.verify(resolver, trustChecker));
         }
     }

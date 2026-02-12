@@ -81,15 +81,23 @@ public class CapBACCertificate implements CapBACToken {
         }
     }
 
+    private static int readLength(DataInputStream dis) throws IOException {
+        int length = dis.readInt();
+        if (length < 0 || length > dis.available()) {
+            throw new IOException("Invalid length: " + length);
+        }
+        return length;
+    }
+
     public static CapBACCertificate fromBytesPayload(byte[] data) throws IOException {
         try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
                 DataInputStream dis = new DataInputStream(bis)) {
             CapBACScheme scheme = CapBACScheme.fromId(dis.readByte());
 
-            int certChainSize = dis.readInt();
+            int certChainSize = readLength(dis);
             List<Certificate> certificateChain = new ArrayList<>(certChainSize);
             for (int i = 0; i < certChainSize; i++) {
-                int certSize = dis.readInt();
+                int certSize = readLength(dis);
                 byte[] certBytes = new byte[certSize];
                 dis.readFully(certBytes);
                 certificateChain.add(Certificate.fromBytes(new DataInputStream(new ByteArrayInputStream(certBytes))));

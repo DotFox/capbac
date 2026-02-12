@@ -55,18 +55,26 @@ public class Certificate {
         }
     }
 
+    private static int readLength(DataInputStream dis) throws IOException {
+        int length = dis.readInt();
+        if (length < 0 || length > dis.available()) {
+            throw new IOException("Invalid length: " + length);
+        }
+        return length;
+    }
+
     public static Certificate fromBytes(DataInputStream dis) throws IOException {
-        int issuerLength = dis.readInt();
+        int issuerLength = readLength(dis);
         byte[] issuer = new byte[issuerLength];
         dis.readFully(issuer);
 
-        int subjectLength = dis.readInt();
+        int subjectLength = readLength(dis);
         byte[] subject = new byte[subjectLength];
         dis.readFully(subject);
 
         long expiration = dis.readLong();
 
-        int capLength = dis.readInt();
+        int capLength = readLength(dis);
         byte[] capBytes = new byte[capLength];
         dis.readFully(capBytes);
 

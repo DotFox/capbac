@@ -46,14 +46,22 @@ public class Invocation {
         }
     }
 
+    private static int readLength(DataInputStream dis) throws IOException {
+        int length = dis.readInt();
+        if (length < 0 || length > dis.available()) {
+            throw new IOException("Invalid length: " + length);
+        }
+        return length;
+    }
+
     public static Invocation fromBytes(DataInputStream dis) throws IOException {
-        int invokerLength = dis.readInt();
+        int invokerLength = readLength(dis);
         byte[] invoker = new byte[invokerLength];
         dis.readFully(invoker);
 
         long expiration = dis.readLong();
 
-        int capLength = dis.readInt();
+        int capLength = readLength(dis);
         byte[] capBytes = new byte[capLength];
         dis.readFully(capBytes);
 

@@ -1,6 +1,5 @@
 package dev.dotfox.capbac;
 
-import dev.dotfox.bls.BLSSignature;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;

@@ -1,12 +1,13 @@
 package dev.dotfox.capbac;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 public class StringCapability implements Capability {
     private final String value;
 
     public StringCapability(String value) {
-        this.value = value;
+        this.value = Objects.requireNonNull(value, "value must not be null");
     }
 
     @Override

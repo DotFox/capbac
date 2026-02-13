@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -75,6 +76,7 @@ public class AuthenticationExampleTest {
     void registrationAndUsage(CapBACScheme scheme) throws IOException {
         CapBAC<AuthCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
         long future = Instant.now().getEpochSecond() + 3600;
+        OptionalLong ce = scheme.hasExpiringCerts() ? OptionalLong.of(future) : OptionalLong.empty();
 
         // Mutable resolver — adding/removing keys simulates registration/revocation
         Map<PrincipalId, BLSPublicKey> keys = new HashMap<>();
@@ -86,7 +88,7 @@ public class AuthenticationExampleTest {
 
         // Self-issued certificate (issuer == subject) — proves key ownership
         CapBACCertificate selfCert = api.forgeCertificate(user, user.getId(),
-                new AuthCapability("self"), future);
+                new AuthCapability("self"), ce);
         CapBACInvocation proofOfKey = api.invoke(user, selfCert,
                 new AuthCapability("self"), future);
 
@@ -103,7 +105,7 @@ public class AuthenticationExampleTest {
         TrustChecker trustService = id -> id.equals(service.getId());
 
         CapBACCertificate apiGrant = api.forgeCertificate(service, user.getId(),
-                new AuthCapability("api:read"), future);
+                new AuthCapability("api:read"), ce);
         assertTrue(apiGrant.verify(resolver, trustService, CODEC, CHECKER),
                 "Service-issued cert should verify");
 
@@ -119,7 +121,7 @@ public class AuthenticationExampleTest {
                 scheme.getBls().pkFromBytes(bot.getId().toBytes()));
 
         CapBACCertificate botCert = api.delegateCertificate(user, apiGrant, bot.getId(),
-                new AuthCapability("api:read:/metrics"), future);
+                new AuthCapability("api:read:/metrics"), ce);
         CapBACInvocation botInvocation = api.invoke(bot, botCert,
                 new AuthCapability("api:read:/metrics"), future);
         assertTrue(botInvocation.verify(resolver, trustService, CODEC, CHECKER),

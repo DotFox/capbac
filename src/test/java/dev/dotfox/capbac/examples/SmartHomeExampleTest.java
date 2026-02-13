@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -78,6 +79,8 @@ public class SmartHomeExampleTest {
         CapBAC<HomeCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
         long future = Instant.now().getEpochSecond() + 3600;
         long past = Instant.now().getEpochSecond() - 3600;
+        OptionalLong ceFuture = scheme.hasExpiringCerts() ? OptionalLong.of(future) : OptionalLong.empty();
+        OptionalLong cePast = scheme.hasExpiringCerts() ? OptionalLong.of(past) : OptionalLong.empty();
 
         Map<PrincipalId, BLSPublicKey> keys = new HashMap<>();
         Resolver resolver = id -> Optional.ofNullable(keys.get(id));
@@ -95,27 +98,29 @@ public class SmartHomeExampleTest {
 
         // --- Step 1: Homeowner forges root cert to self ---
         CapBACCertificate ownerCert = api.forgeCertificate(homeowner, homeowner.getId(),
-                new HomeCapability("home"), future);
+                new HomeCapability("home"), ceFuture);
         assertTrue(ownerCert.verify(resolver, trustOwner, CODEC, CHECKER));
 
         // --- Step 2: Homeowner delegates "home:lights" to family member ---
         CapBACCertificate familyCert = api.delegateCertificate(homeowner, ownerCert, familyMember.getId(),
-                new HomeCapability("home:lights"), future);
+                new HomeCapability("home:lights"), ceFuture);
         assertTrue(familyCert.verify(resolver, trustOwner, CODEC, CHECKER));
 
         // --- Step 3: Family member delegates to guest with PAST expiry ---
-        CapBACCertificate expiredGuestCert = api.delegateCertificate(familyMember, familyCert, guest.getId(),
-                new HomeCapability("home:lights:living-room"), past);
+        // For non-expiring schemes, certs don't carry expiry so this cert is valid;
+        // the expiry only matters on the invocation.
+        CapBACCertificate guestCert = api.delegateCertificate(familyMember, familyCert, guest.getId(),
+                new HomeCapability("home:lights:living-room"), cePast);
 
-        // --- Step 4: Guest invokes with expired cert — fails ---
-        CapBACInvocation expiredInvocation = api.invoke(guest, expiredGuestCert,
+        // --- Step 4: Guest invokes with past expiry — fails due to invocation expiry ---
+        CapBACInvocation expiredInvocation = api.invoke(guest, guestCert,
                 new HomeCapability("home:lights:living-room"), past);
         assertFalse(expiredInvocation.verify(resolver, trustOwner, CODEC, CHECKER),
                 "Expired guest invocation should fail");
 
         // --- Step 5: Family member re-delegates with future expiry — passes ---
         CapBACCertificate validGuestCert = api.delegateCertificate(familyMember, familyCert, guest.getId(),
-                new HomeCapability("home:lights:living-room"), future);
+                new HomeCapability("home:lights:living-room"), ceFuture);
         CapBACInvocation validInvocation = api.invoke(guest, validGuestCert,
                 new HomeCapability("home:lights:living-room"), future);
         assertTrue(validInvocation.verify(resolver, trustOwner, CODEC, CHECKER),

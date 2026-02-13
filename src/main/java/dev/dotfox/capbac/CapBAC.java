@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalLong;
 
 import dev.dotfox.bls.BLS;
 import dev.dotfox.bls.BLSSignature;
@@ -22,15 +23,27 @@ public class CapBAC<T extends Capability> {
         this.checker = Objects.requireNonNull(checker, "checker");
     }
 
+    private void validateExpiration(OptionalLong expiration) {
+        if (scheme.hasExpiringCerts() && expiration.isEmpty()) {
+            throw new IllegalArgumentException("Expiring scheme requires a certificate expiration.");
+        }
+        if (!scheme.hasExpiringCerts() && expiration.isPresent()) {
+            throw new IllegalArgumentException("Non-expiring scheme must not have a certificate expiration.");
+        }
+    }
+
     public CapBACCertificate forgeCertificate(Principal issuer, PrincipalId subject, T capability,
-            long expiration) {
+            OptionalLong expiration) {
+        validateExpiration(expiration);
         Certificate cert = new Certificate(issuer.getId(), subject, expiration, capability.toBytes());
         BLSSignature signature = issuer.sign(cert.toBytes());
         return new CapBACCertificate(scheme, Collections.singletonList(cert), signature);
     }
 
     public CapBACCertificate delegateCertificate(Principal issuer, CapBACCertificate originalToken, PrincipalId subject,
-            T capability, long expiration) throws IOException {
+            T capability, OptionalLong expiration) throws IOException {
+        validateExpiration(expiration);
+
         if (originalToken.getCertificateChain().isEmpty()) {
             throw new IllegalArgumentException("Cannot delegate an empty certificate chain.");
         }

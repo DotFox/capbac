@@ -5,18 +5,27 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.OptionalLong;
 
 public class Certificate {
     private final PrincipalId issuer;
     private final PrincipalId subject;
-    private final long expiration;
+    private final OptionalLong expiration;
     private final byte[] capability;
 
-    public Certificate(PrincipalId issuer, PrincipalId subject, long expiration, byte[] capability) {
+    public Certificate(PrincipalId issuer, PrincipalId subject, OptionalLong expiration, byte[] capability) {
         this.issuer = issuer;
         this.subject = subject;
         this.expiration = expiration;
         this.capability = capability.clone();
+    }
+
+    public Certificate(PrincipalId issuer, PrincipalId subject, long expiration, byte[] capability) {
+        this(issuer, subject, OptionalLong.of(expiration), capability);
+    }
+
+    public Certificate(PrincipalId issuer, PrincipalId subject, byte[] capability) {
+        this(issuer, subject, OptionalLong.empty(), capability);
     }
 
     public PrincipalId getIssuer() {
@@ -27,7 +36,7 @@ public class Certificate {
         return subject;
     }
 
-    public long getExpiration() {
+    public OptionalLong getExpiration() {
         return expiration;
     }
 
@@ -48,7 +57,9 @@ public class Certificate {
             byte[] subjectBytes = subject.toBytes();
             dos.writeInt(subjectBytes.length);
             dos.write(subjectBytes);
-            dos.writeLong(expiration);
+            if (expiration.isPresent()) {
+                dos.writeLong(expiration.getAsLong());
+            }
             dos.writeInt(capability.length);
             dos.write(capability);
             return bos.toByteArray();
@@ -65,7 +76,7 @@ public class Certificate {
         return length;
     }
 
-    public static Certificate fromBytes(DataInputStream dis) throws IOException {
+    public static Certificate fromBytes(DataInputStream dis, boolean hasExpiration) throws IOException {
         int issuerLength = readLength(dis);
         byte[] issuer = new byte[issuerLength];
         dis.readFully(issuer);
@@ -74,12 +85,21 @@ public class Certificate {
         byte[] subject = new byte[subjectLength];
         dis.readFully(subject);
 
-        long expiration = dis.readLong();
+        OptionalLong expiration;
+        if (hasExpiration) {
+            expiration = OptionalLong.of(dis.readLong());
+        } else {
+            expiration = OptionalLong.empty();
+        }
 
         int capLength = readLength(dis);
         byte[] capBytes = new byte[capLength];
         dis.readFully(capBytes);
 
-        return new Certificate(new PrincipalId(issuer), new PrincipalId(subject), expiration, capBytes);
+        if (expiration.isPresent()) {
+            return new Certificate(new PrincipalId(issuer), new PrincipalId(subject), expiration.getAsLong(), capBytes);
+        } else {
+            return new Certificate(new PrincipalId(issuer), new PrincipalId(subject), capBytes);
+        }
     }
 }

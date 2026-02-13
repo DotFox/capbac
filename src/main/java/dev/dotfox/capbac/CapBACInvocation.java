@@ -34,7 +34,10 @@ public class CapBACInvocation implements CapBACToken {
             CapabilityCodec<T> codec, AttenuationChecker<T> checker) throws IOException {
         // 1. Check expiration
         long now = Instant.now().getEpochSecond();
-        if (invocation.getExpiration() < now || certificateChain.stream().anyMatch(c -> c.getExpiration() < now)) {
+        if (invocation.getExpiration() < now) {
+            return false;
+        }
+        if (scheme.hasExpiringCerts() && certificateChain.stream().anyMatch(c -> c.getExpiration().getAsLong() < now)) {
             return false;
         }
 
@@ -138,7 +141,7 @@ public class CapBACInvocation implements CapBACToken {
                 int certSize = readLength(dis);
                 byte[] certBytes = new byte[certSize];
                 dis.readFully(certBytes);
-                certificateChain.add(Certificate.fromBytes(new DataInputStream(new ByteArrayInputStream(certBytes))));
+                certificateChain.add(Certificate.fromBytes(new DataInputStream(new ByteArrayInputStream(certBytes)), scheme.hasExpiringCerts()));
             }
 
             int invocationSize = readLength(dis);

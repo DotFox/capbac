@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Nested;
@@ -38,11 +39,14 @@ public class CapBACTest {
     private Resolver resolver;
     private TrustChecker trustChecker;
 
+    private CapBACScheme currentScheme;
+
     private static final StringCapabilityCodec CODEC = new StringCapabilityCodec();
     private static final AttenuationChecker<StringCapability> CHECKER =
             (parent, child) -> child.getValue().startsWith(parent.getValue());
 
     void setupForScheme(CapBACScheme scheme) {
+        this.currentScheme = scheme;
         this.bls = scheme.getBls();
         this.rootKeyPair = this.bls.keyGen();
         this.intermediateKeyPair = this.bls.keyGen();
@@ -59,6 +63,10 @@ public class CapBACTest {
 
         this.resolver = id -> java.util.Optional.ofNullable(resolverMap.get(id));
         this.trustChecker = id -> id.equals(rootId);
+    }
+
+    private OptionalLong certExp(long expiration) {
+        return currentScheme.hasExpiringCerts() ? OptionalLong.of(expiration) : OptionalLong.empty();
     }
 
     private CapBACInvocation createValidInvocationToken(CapBACScheme scheme, long expiration) {
@@ -90,10 +98,11 @@ public class CapBACTest {
     }
 
     private List<Certificate> createCertificateChain(long expiration) {
+        OptionalLong ce = certExp(expiration);
         byte[] cap1Bytes = new StringCapability("read").toBytes();
-        Certificate cert1 = new Certificate(rootId, intermediateId, expiration, cap1Bytes);
+        Certificate cert1 = new Certificate(rootId, intermediateId, ce, cap1Bytes);
         byte[] cap2Bytes = new StringCapability("read:/data/file.txt").toBytes();
-        Certificate cert2 = new Certificate(intermediateId, userId, expiration, cap2Bytes);
+        Certificate cert2 = new Certificate(intermediateId, userId, ce, cap2Bytes);
         return Arrays.asList(cert1, cert2);
     }
 
@@ -110,18 +119,18 @@ public class CapBACTest {
             Principal userPrincipal = new Principal(bls, userKeyPair);
 
             long expiration = Instant.now().getEpochSecond() + 3600;
+            OptionalLong ce = certExp(expiration);
             StringCapability readCap = new StringCapability("read");
             StringCapability fileCap = new StringCapability("read:/data/file.txt");
 
             // 1. Forge
-            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(), readCap,
-                    expiration);
+            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(),
+                    readCap, ce);
             assertTrue(rootCert.verify(resolver, trustChecker, CODEC, CHECKER));
 
             // 2. Delegate
             CapBACCertificate delegatedCert = api.delegateCertificate(intermediatePrincipal, rootCert,
-                    userPrincipal.getId(),
-                    fileCap, expiration);
+                    userPrincipal.getId(), fileCap, ce);
             assertTrue(delegatedCert.verify(resolver, trustChecker, CODEC, CHECKER));
 
             // 3. Invoke
@@ -225,15 +234,16 @@ public class CapBACTest {
         void testFail_BrokenDelegationChain(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
+            OptionalLong ce = certExp(validExpiration);
             BLSKeyPair anotherKeyPair = bls.keyGen();
             PrincipalId anotherId = new PrincipalId(anotherKeyPair.getPk().toBytes());
             resolverMap.put(anotherId, anotherKeyPair.getPk());
 
             // Create a broken chain
             byte[] cap1Bytes = new StringCapability("read").toBytes();
-            Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
+            Certificate cert1 = new Certificate(rootId, intermediateId, ce, cap1Bytes);
             byte[] cap2Bytes = new StringCapability("read:/data/file.txt").toBytes();
-            Certificate cert2 = new Certificate(intermediateId, anotherId, validExpiration, cap2Bytes);
+            Certificate cert2 = new Certificate(intermediateId, anotherId, ce, cap2Bytes);
             List<Certificate> brokenChain = Arrays.asList(cert1, cert2);
 
             Invocation invocation = new Invocation(userId, validExpiration, cert2.getRawCapability());
@@ -253,13 +263,14 @@ public class CapBACTest {
         void testFail_AttenuationViolation(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
+            OptionalLong ce = certExp(validExpiration);
 
             // Root grants "read:/data/file.txt" (narrow)
             byte[] cap1Bytes = new StringCapability("read:/data/file.txt").toBytes();
-            Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
+            Certificate cert1 = new Certificate(rootId, intermediateId, ce, cap1Bytes);
             // Intermediate delegates "read:/data/file.txt"
             byte[] cap2Bytes = new StringCapability("read:/data/file.txt").toBytes();
-            Certificate cert2 = new Certificate(intermediateId, userId, validExpiration, cap2Bytes);
+            Certificate cert2 = new Certificate(intermediateId, userId, ce, cap2Bytes);
             List<Certificate> chain = Arrays.asList(cert1, cert2);
 
             // Invocation uses "read" — broader than last cert
@@ -278,7 +289,7 @@ public class CapBACTest {
     @Nested
     class CertificateTokenFailures {
         @ParameterizedTest
-        @EnumSource(CapBACScheme.class)
+        @EnumSource(value = CapBACScheme.class, names = {"MIN_PK", "MIN_SIG"})
         void testFail_ExpiredToken(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long pastExpiration = Instant.now().getEpochSecond() - 3600;
@@ -300,15 +311,16 @@ public class CapBACTest {
         void testFail_BrokenDelegationChain(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
+            OptionalLong ce = certExp(validExpiration);
             BLSKeyPair anotherKeyPair = bls.keyGen();
             PrincipalId anotherId = new PrincipalId(anotherKeyPair.getPk().toBytes());
             resolverMap.put(anotherId, anotherKeyPair.getPk());
 
             // Create a broken chain: cert2 issuer doesn't match cert1 subject
             byte[] cap1Bytes = new StringCapability("read").toBytes();
-            Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
+            Certificate cert1 = new Certificate(rootId, intermediateId, ce, cap1Bytes);
             byte[] cap2Bytes = new StringCapability("read:/data/file.txt").toBytes();
-            Certificate cert2 = new Certificate(anotherId, userId, validExpiration, cap2Bytes);
+            Certificate cert2 = new Certificate(anotherId, userId, ce, cap2Bytes);
             List<Certificate> brokenChain = Arrays.asList(cert1, cert2);
 
             BLSSignature sig1 = bls.sign(rootKeyPair.getSk(), cert1.toBytes());
@@ -324,13 +336,14 @@ public class CapBACTest {
         void testFail_AttenuationViolation(CapBACScheme scheme) throws IOException {
             setupForScheme(scheme);
             long validExpiration = Instant.now().getEpochSecond() + 3600;
+            OptionalLong ce = certExp(validExpiration);
 
             // Root grants "read:/data/file.txt" (narrow)
             byte[] cap1Bytes = new StringCapability("read:/data/file.txt").toBytes();
-            Certificate cert1 = new Certificate(rootId, intermediateId, validExpiration, cap1Bytes);
+            Certificate cert1 = new Certificate(rootId, intermediateId, ce, cap1Bytes);
             // Intermediate delegates "write" (broader than parent) — escalation
             byte[] cap2Bytes = new StringCapability("write").toBytes();
-            Certificate cert2 = new Certificate(intermediateId, userId, validExpiration, cap2Bytes);
+            Certificate cert2 = new Certificate(intermediateId, userId, ce, cap2Bytes);
             List<Certificate> chain = Arrays.asList(cert1, cert2);
 
             BLSSignature sig1 = bls.sign(rootKeyPair.getSk(), cert1.toBytes());
@@ -354,14 +367,15 @@ public class CapBACTest {
             Principal intermediatePrincipal = new Principal(bls, intermediateKeyPair);
 
             long expiration = Instant.now().getEpochSecond() + 3600;
+            OptionalLong ce = certExp(expiration);
             StringCapability narrowCap = new StringCapability("read:/data/file.txt");
             StringCapability broadCap = new StringCapability("write");
 
-            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(), narrowCap,
-                    expiration);
+            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(),
+                    narrowCap, ce);
 
             assertThrows(IllegalArgumentException.class, () ->
-                    api.delegateCertificate(intermediatePrincipal, rootCert, userId, broadCap, expiration));
+                    api.delegateCertificate(intermediatePrincipal, rootCert, userId, broadCap, ce));
         }
 
         @ParameterizedTest
@@ -375,14 +389,15 @@ public class CapBACTest {
             Principal userPrincipal = new Principal(bls, userKeyPair);
 
             long expiration = Instant.now().getEpochSecond() + 3600;
+            OptionalLong ce = certExp(expiration);
             StringCapability readCap = new StringCapability("read");
             StringCapability fileCap = new StringCapability("read:/data/file.txt");
             StringCapability broadCap = new StringCapability("write");
 
-            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(), readCap,
-                    expiration);
+            CapBACCertificate rootCert = api.forgeCertificate(rootPrincipal, intermediatePrincipal.getId(),
+                    readCap, ce);
             CapBACCertificate delegatedCert = api.delegateCertificate(intermediatePrincipal, rootCert,
-                    userPrincipal.getId(), fileCap, expiration);
+                    userPrincipal.getId(), fileCap, ce);
 
             assertThrows(IllegalArgumentException.class, () ->
                     api.invoke(userPrincipal, delegatedCert, broadCap, expiration));

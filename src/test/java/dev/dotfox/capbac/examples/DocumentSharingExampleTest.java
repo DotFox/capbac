@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -95,6 +96,7 @@ public class DocumentSharingExampleTest {
     void sharingAndRevocation(CapBACScheme scheme) throws IOException {
         CapBAC<DocCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
         long future = Instant.now().getEpochSecond() + 3600;
+        OptionalLong ce = scheme.hasExpiringCerts() ? OptionalLong.of(future) : OptionalLong.empty();
 
         Map<PrincipalId, BLSPublicKey> keys = new HashMap<>();
         Resolver resolver = id -> Optional.ofNullable(keys.get(id));
@@ -112,17 +114,17 @@ public class DocumentSharingExampleTest {
 
         // --- Step 1: Owner holds doc:abc123:EDIT ---
         CapBACCertificate ownerCert = api.forgeCertificate(owner, owner.getId(),
-                new DocCapability("abc123", Permission.EDIT), future);
+                new DocCapability("abc123", Permission.EDIT), ce);
         assertTrue(ownerCert.verify(resolver, trustOwner, CODEC, CHECKER));
 
         // --- Step 2: Owner delegates COMMENT to colleague ---
         CapBACCertificate colleagueCert = api.delegateCertificate(owner, ownerCert, colleague.getId(),
-                new DocCapability("abc123", Permission.COMMENT), future);
+                new DocCapability("abc123", Permission.COMMENT), ce);
         assertTrue(colleagueCert.verify(resolver, trustOwner, CODEC, CHECKER));
 
         // --- Step 3: Colleague delegates VIEW to reviewer ---
         CapBACCertificate reviewerCert = api.delegateCertificate(colleague, colleagueCert, reviewer.getId(),
-                new DocCapability("abc123", Permission.VIEW), future);
+                new DocCapability("abc123", Permission.VIEW), ce);
 
         // --- Step 4: Reviewer invokes VIEW — passes ---
         CapBACInvocation reviewerInvocation = api.invoke(reviewer, reviewerCert,

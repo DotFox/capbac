@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -75,6 +76,7 @@ public class DeviceManufacturingExampleTest {
     void deviceChainAndBatchRevocation(CapBACScheme scheme) throws IOException {
         CapBAC<DeviceCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
         long future = Instant.now().getEpochSecond() + 3600;
+        OptionalLong ce = scheme.hasExpiringCerts() ? OptionalLong.of(future) : OptionalLong.empty();
 
         Map<PrincipalId, BLSPublicKey> keys = new HashMap<>();
         Resolver resolver = id -> Optional.ofNullable(keys.get(id));
@@ -96,15 +98,15 @@ public class DeviceManufacturingExampleTest {
 
         // --- Step 1: Manufacturer → Factory A ---
         CapBACCertificate factoryACert = api.forgeCertificate(manufacturer, factoryA.getId(),
-                new DeviceCapability("factory-a"), future);
+                new DeviceCapability("factory-a"), ce);
 
         // --- Step 2: Factory A → Batch ---
         CapBACCertificate batchACert = api.delegateCertificate(factoryA, factoryACert, batchA.getId(),
-                new DeviceCapability("factory-a:batch-2024-03"), future);
+                new DeviceCapability("factory-a:batch-2024-03"), ce);
 
         // --- Step 3: Batch → Device ---
         CapBACCertificate deviceACert = api.delegateCertificate(batchA, batchACert, deviceA.getId(),
-                new DeviceCapability("factory-a:batch-2024-03:serial-00042"), future);
+                new DeviceCapability("factory-a:batch-2024-03:serial-00042"), ce);
 
         // --- Step 4: Device invokes — full 3-hop chain verifies ---
         CapBACInvocation deviceAInvocation = api.invoke(deviceA, deviceACert,
@@ -114,9 +116,9 @@ public class DeviceManufacturingExampleTest {
 
         // --- Set up Factory B with its own device ---
         CapBACCertificate factoryBCert = api.forgeCertificate(manufacturer, factoryB.getId(),
-                new DeviceCapability("factory-b"), future);
+                new DeviceCapability("factory-b"), ce);
         CapBACCertificate deviceBCert = api.delegateCertificate(factoryB, factoryBCert, deviceB.getId(),
-                new DeviceCapability("factory-b:device-001"), future);
+                new DeviceCapability("factory-b:device-001"), ce);
         CapBACInvocation deviceBInvocation = api.invoke(deviceB, deviceBCert,
                 new DeviceCapability("factory-b:device-001"), future);
         assertTrue(deviceBInvocation.verify(resolver, trustManufacturer, CODEC, CHECKER),

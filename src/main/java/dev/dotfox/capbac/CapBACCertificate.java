@@ -29,10 +29,12 @@ public class CapBACCertificate implements CapBACToken {
     @Override
     public <T extends Capability> boolean verify(Resolver resolver, TrustChecker trustChecker,
             CapabilityCodec<T> codec, AttenuationChecker<T> checker) throws IOException {
-        // 1. Check expiration
-        long now = Instant.now().getEpochSecond();
-        if (certificateChain.stream().anyMatch(c -> c.getExpiration() < now)) {
-            return false;
+        // 1. Check expiration (only for expiring schemes)
+        if (scheme.hasExpiringCerts()) {
+            long now = Instant.now().getEpochSecond();
+            if (certificateChain.stream().anyMatch(c -> c.getExpiration().getAsLong() < now)) {
+                return false;
+            }
         }
 
         // 2. Check trust anchor
@@ -111,7 +113,7 @@ public class CapBACCertificate implements CapBACToken {
                 int certSize = readLength(dis);
                 byte[] certBytes = new byte[certSize];
                 dis.readFully(certBytes);
-                certificateChain.add(Certificate.fromBytes(new DataInputStream(new ByteArrayInputStream(certBytes))));
+                certificateChain.add(Certificate.fromBytes(new DataInputStream(new ByteArrayInputStream(certBytes)), scheme.hasExpiringCerts()));
             }
 
             int sigSize = scheme.getSignatureSize();

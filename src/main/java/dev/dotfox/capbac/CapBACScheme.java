@@ -8,7 +8,9 @@ import dev.dotfox.bls.MinSIG;
 
 public enum CapBACScheme {
     MIN_PK((byte) 0x01, MinPK.INSTANCE, 96),
-    MIN_SIG((byte) 0x02, MinSIG.INSTANCE, 48);
+    MIN_SIG((byte) 0x02, MinSIG.INSTANCE, 48),
+    MIN_PK_NON_EXPIRING((byte) 0x05, MinPK.INSTANCE, 96),
+    MIN_SIG_NON_EXPIRING((byte) 0x06, MinSIG.INSTANCE, 48);
 
     private final byte id;
     private final BLS bls;
@@ -32,10 +34,21 @@ public enum CapBACScheme {
         return signatureSize;
     }
 
+    public boolean hasExpiringCerts() {
+        return (id & 0x04) == 0;
+    }
+
     public static CapBACScheme fromId(byte id) {
+        if ((id & 0xF8) != 0) {
+            throw new IllegalArgumentException("Reserved bits set in scheme ID: 0x" + String.format("%02X", id));
+        }
+        int blsBits = id & 0x03;
+        if (blsBits == 0 || blsBits == 3) {
+            throw new IllegalArgumentException("Invalid BLS scheme bits in scheme ID: 0x" + String.format("%02X", id));
+        }
         return Arrays.stream(values())
                 .filter(scheme -> scheme.id == id)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unknown scheme ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Unknown scheme ID: 0x" + String.format("%02X", id)));
     }
 }

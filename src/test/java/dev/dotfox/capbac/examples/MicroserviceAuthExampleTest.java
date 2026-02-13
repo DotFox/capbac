@@ -13,9 +13,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -95,6 +95,7 @@ public class MicroserviceAuthExampleTest {
     void requestFlowAndLeastPrivilege(CapBACScheme scheme) throws IOException {
         CapBAC<RequestCapability> api = new CapBAC<>(scheme, CODEC, CHECKER);
         long future = Instant.now().getEpochSecond() + 3600;
+        OptionalLong ce = scheme.hasExpiringCerts() ? OptionalLong.of(future) : OptionalLong.empty();
 
         Map<PrincipalId, BLSPublicKey> keys = new HashMap<>();
         Resolver resolver = id -> Optional.ofNullable(keys.get(id));
@@ -114,14 +115,14 @@ public class MicroserviceAuthExampleTest {
         RequestCapability ordersCap = new RequestCapability("orders",
                 new TreeSet<>(Arrays.asList("read", "write")));
         CapBACCertificate orderServiceCert = api.forgeCertificate(gateway, orderService.getId(),
-                ordersCap, future);
+                ordersCap, ce);
         assertTrue(orderServiceCert.verify(resolver, trustGateway, CODEC, CHECKER));
 
         // --- Step 2: Order Service delegates "orders/123:read" to Inventory Service ---
         RequestCapability narrowCap = new RequestCapability("orders/123",
                 Collections.singleton("read"));
         CapBACCertificate inventoryCert = api.delegateCertificate(orderService, orderServiceCert,
-                inventoryService.getId(), narrowCap, future);
+                inventoryService.getId(), narrowCap, ce);
 
         // --- Step 3: Inventory Service invokes — single aggregate verify ---
         CapBACInvocation inventoryInvocation = api.invoke(inventoryService, inventoryCert,
